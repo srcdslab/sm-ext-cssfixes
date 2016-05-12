@@ -1,0 +1,26 @@
+# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+import os
+
+if not "SM" in globals():
+	SM = Extension
+
+projectName = 'CSSFixes'
+
+project = SM.HL2Project(builder, projectName + '.ext')
+project.sources += [
+  'extension.cpp',
+  '../../public/smsdk_ext.cpp',
+  '../../public/CDetour/detours.cpp',
+  '../../public/asm/asm.c'
+]
+
+for sdk_name in SM.sdks:
+  sdk = SM.sdks[sdk_name]
+  binary = SM.HL2Config(project, projectName + '.ext', sdk)
+  binary.compiler.cxxincludes += [
+    os.path.join(SM.sm_root, 'public', 'extensions'),
+    os.path.join(SM.sm_root, 'public', 'sourcepawn'),
+    os.path.join(SM.sm_root, 'public', 'amtl')
+  ]
+
+SM.extensions += builder.Add(project)
