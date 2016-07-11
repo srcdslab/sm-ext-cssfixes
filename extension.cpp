@@ -130,7 +130,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		return false;
 	}
 
-	for(int i = 0; i < sizeof(gs_Patches) / sizeof(*gs_Patches); i++)
+	for(size_t i = 0; i < sizeof(gs_Patches) / sizeof(*gs_Patches); i++)
 	{
 		struct SrcdsPatch *pPatch = &gs_Patches[i];
 		int PatchLen = strlen(pPatch->pPatchPattern);
@@ -179,7 +179,7 @@ void CSSFixes::SDK_OnUnload()
 
 	gameconfs->CloseGameConfigFile(g_pGameConf);
 
-	for(int i = 0; i < sizeof(gs_Patches) / sizeof(*gs_Patches); i++)
+	for(size_t i = 0; i < sizeof(gs_Patches) / sizeof(*gs_Patches); i++)
 	{
 		struct SrcdsPatch *pPatch = &gs_Patches[i];
 		int PatchLen = strlen(pPatch->pPatchPattern);
