@@ -9,6 +9,30 @@
 				"library"	"server"
 				"linux"		"@_ZN11CBaseFilter18InputTestActivatorER11inputdata_t"
 			}
+
+			"CBaseEntity_PostConstructor"
+			{
+				"library"	"server"
+				"linux"		"@_ZN11CBaseEntity15PostConstructorEPKc"
+			}
+
+			"CBasePlayer_FindUseEntity"
+			{
+				"library"	"server"
+				"linux"		"@_ZN11CBasePlayer13FindUseEntityEv"
+			}
+
+			"CTraceFilterSimple_CTraceFilterSimple"
+			{
+				"library"	"server"
+				"linux"		"@_ZN18CTraceFilterSimpleC2EPK13IHandleEntityiPFbPS0_iE"
+			}
+
+			"CTraceFilterNoNPCsOrPlayer"
+			{
+				"library"	"server"
+				"linux"		"@_ZTV26CTraceFilterNoNPCsOrPlayer"
+			}
 		}
 	}
 }

@@ -91,6 +91,9 @@ SMEXT_LINK(&g_Interface);
 IGameConfig *g_pGameConf = NULL;
 
 CDetour *detourInputTestActivator = NULL;
+CDetour *detourPostConstructor = NULL;
+CDetour *detourFindUseEntity = NULL;
+CDetour *detourCTraceFilterSimple = NULL;
 
 DETOUR_DECL_MEMBER1(InputTestActivator, void, inputdata_t *, inputdata)
 {
@@ -98,6 +101,42 @@ DETOUR_DECL_MEMBER1(InputTestActivator, void, inputdata_t *, inputdata)
 		return;
 
 	DETOUR_MEMBER_CALL(InputTestActivator)(inputdata);
+}
+
+DETOUR_DECL_MEMBER1(PostConstructor, void, const char *, szClassname)
+{
+	if(strncmp(szClassname, "info_player_", 12) == 0)
+	{
+		CBaseEntity *pEntity = (CBaseEntity *)this;
+
+		datamap_t *pMap = gamehelpers->GetDataMap(pEntity);
+		typedescription_t *td = gamehelpers->FindInDataMap(pMap, "m_iEFlags");
+
+		*(uint32 *)((intptr_t)pEntity + td->fieldOffset[TD_OFFSET_NORMAL]) |= (1<<9); // EFL_SERVER_ONLY
+	}
+
+	DETOUR_MEMBER_CALL(PostConstructor)(szClassname);
+}
+
+volatile bool gv_InFindUseEntity = false;
+DETOUR_DECL_MEMBER0(FindUseEntity, CBaseEntity *)
+{
+	// Signal CTraceFilterSimple that we are in FindUseEntity
+	gv_InFindUseEntity = true;
+	CBaseEntity *pEntity = DETOUR_MEMBER_CALL(FindUseEntity)();
+	gv_InFindUseEntity = false;
+	return pEntity;
+}
+
+uintptr_t g_CTraceFilterNoNPCsOrPlayer = 0;
+typedef bool (*ShouldHitFunc_t)( IHandleEntity *pHandleEntity, int contentsMask );
+DETOUR_DECL_MEMBER3(CTraceFilterSimple, void, const IHandleEntity *, passedict, int, collisionGroup, ShouldHitFunc_t, pExtraShouldHitFunc)
+{
+	DETOUR_MEMBER_CALL(CTraceFilterSimple)(passedict, collisionGroup, pExtraShouldHitFunc);
+
+	// If we're in FindUseEntity right now then switch out the VTable
+	if(gv_InFindUseEntity)
+		*(uintptr_t *)this = g_CTraceFilterNoNPCsOrPlayer;
 }
 
 bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
@@ -114,14 +153,47 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	CDetourManager::Init(g_pSM->GetScriptingEngine(), g_pGameConf);
 
 	detourInputTestActivator = DETOUR_CREATE_MEMBER(InputTestActivator, "CBaseFilter_InputTestActivator");
-
 	if(detourInputTestActivator == NULL)
 	{
 		snprintf(error, maxlength, "Could not create detour for CBaseFilter_InputTestActivator");
 		return false;
 	}
-
 	detourInputTestActivator->EnableDetour();
+
+	detourPostConstructor = DETOUR_CREATE_MEMBER(PostConstructor, "CBaseEntity_PostConstructor");
+	if(detourPostConstructor == NULL)
+	{
+		snprintf(error, maxlength, "Could not create detour for CBaseEntity_PostConstructor");
+		return false;
+	}
+	detourPostConstructor->EnableDetour();
+
+	detourFindUseEntity = DETOUR_CREATE_MEMBER(FindUseEntity, "CBasePlayer_FindUseEntity");
+	if(detourFindUseEntity == NULL)
+	{
+		snprintf(error, maxlength, "Could not create detour for CBasePlayer_FindUseEntity");
+		return false;
+	}
+	detourFindUseEntity->EnableDetour();
+
+	detourCTraceFilterSimple = DETOUR_CREATE_MEMBER(CTraceFilterSimple, "CTraceFilterSimple_CTraceFilterSimple");
+	if(detourCTraceFilterSimple == NULL)
+	{
+		snprintf(error, maxlength, "Could not create detour for CTraceFilterSimple_CTraceFilterSimple");
+		return false;
+	}
+	detourCTraceFilterSimple->EnableDetour();
+
+	// Find VTable for CTraceFilterNoNPCsOrPlayer
+	uintptr_t pCTraceFilterNoNPCsOrPlayer;
+	if(!g_pGameConf->GetMemSig("CTraceFilterNoNPCsOrPlayer", (void **)(&pCTraceFilterNoNPCsOrPlayer)) || !pCTraceFilterNoNPCsOrPlayer)
+	{
+		snprintf(error, maxlength, "Failed to find CTraceFilterNoNPCsOrPlayer.\n");
+		SDK_OnUnload();
+		return false;
+	}
+	// First function in VTable
+	g_CTraceFilterNoNPCsOrPlayer = pCTraceFilterNoNPCsOrPlayer + 8;
 
 	void *pServerSo = dlopen("cstrike/bin/server_srv.so", RTLD_NOW);
 	if(!pServerSo)
@@ -130,6 +202,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		return false;
 	}
 
+	// Apply all patches
 	for(size_t i = 0; i < sizeof(gs_Patches) / sizeof(*gs_Patches); i++)
 	{
 		struct SrcdsPatch *pPatch = &gs_Patches[i];
@@ -177,8 +250,27 @@ void CSSFixes::SDK_OnUnload()
 		detourInputTestActivator = NULL;
 	}
 
+	if(detourPostConstructor != NULL)
+	{
+		detourPostConstructor->Destroy();
+		detourPostConstructor = NULL;
+	}
+
+	if(detourFindUseEntity != NULL)
+	{
+		detourFindUseEntity->Destroy();
+		detourFindUseEntity = NULL;
+	}
+
+	if(detourCTraceFilterSimple != NULL)
+	{
+		detourCTraceFilterSimple->Destroy();
+		detourCTraceFilterSimple = NULL;
+	}
+
 	gameconfs->CloseGameConfigFile(g_pGameConf);
 
+	// Revert all applied patches
 	for(size_t i = 0; i < sizeof(gs_Patches) / sizeof(*gs_Patches); i++)
 	{
 		struct SrcdsPatch *pPatch = &gs_Patches[i];

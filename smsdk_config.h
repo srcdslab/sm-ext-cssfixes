@@ -40,7 +40,7 @@
 /* Basic information exposed publicly */
 #define SMEXT_CONF_NAME			"CSSFixes"
 #define SMEXT_CONF_DESCRIPTION	"Patches bugs in the CSS server binary."
-#define SMEXT_CONF_VERSION		"1.0"
+#define SMEXT_CONF_VERSION		"1.1"
 #define SMEXT_CONF_AUTHOR		"BotoX"
 #define SMEXT_CONF_URL			""
 #define SMEXT_CONF_LOGTAG		"CSSFIXES"
@@ -65,7 +65,7 @@
 //#define SMEXT_ENABLE_DBMANAGER
 #define SMEXT_ENABLE_GAMECONF
 #define SMEXT_ENABLE_MEMUTILS
-//#define SMEXT_ENABLE_GAMEHELPERS
+#define SMEXT_ENABLE_GAMEHELPERS
 //#define SMEXT_ENABLE_TIMERSYS
 //#define SMEXT_ENABLE_THREADER
 //#define SMEXT_ENABLE_LIBSYS
