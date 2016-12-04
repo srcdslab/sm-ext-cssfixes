@@ -33,6 +33,12 @@
 				"library"	"server"
 				"linux"		"@_ZTV26CTraceFilterNoNPCsOrPlayer"
 			}
+
+			"CTriggerMultiple_MultiWaitOver"
+			{
+				"library"	"server"
+				"linux"		"@_ZN16CTriggerMultiple13MultiWaitOverEv"
+			}
 		}
 	}
 }

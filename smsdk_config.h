@@ -40,7 +40,7 @@
 /* Basic information exposed publicly */
 #define SMEXT_CONF_NAME			"CSSFixes"
 #define SMEXT_CONF_DESCRIPTION	"Patches bugs in the CSS server binary."
-#define SMEXT_CONF_VERSION		"1.1"
+#define SMEXT_CONF_VERSION		"1.2"
 #define SMEXT_CONF_AUTHOR		"BotoX"
 #define SMEXT_CONF_URL			""
 #define SMEXT_CONF_LOGTAG		"CSSFIXES"

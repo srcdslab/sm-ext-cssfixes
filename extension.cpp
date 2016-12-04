@@ -94,6 +94,7 @@ CDetour *detourInputTestActivator = NULL;
 CDetour *detourPostConstructor = NULL;
 CDetour *detourFindUseEntity = NULL;
 CDetour *detourCTraceFilterSimple = NULL;
+CDetour *detourMultiWaitOver = NULL;
 
 DETOUR_DECL_MEMBER1(InputTestActivator, void, inputdata_t *, inputdata)
 {
@@ -137,6 +138,16 @@ DETOUR_DECL_MEMBER3(CTraceFilterSimple, void, const IHandleEntity *, passedict, 
 	// If we're in FindUseEntity right now then switch out the VTable
 	if(gv_InFindUseEntity)
 		*(uintptr_t *)this = g_CTraceFilterNoNPCsOrPlayer;
+}
+
+DETOUR_DECL_MEMBER0(MultiWaitOver, void)
+{
+	CBaseEntity *pEntity = (CBaseEntity *)this;
+	edict_t *pEdict = gamehelpers->EdictOfIndex(gamehelpers->EntityToBCompatRef(pEntity));
+	if(pEdict)
+		engine->TriggerMoved(pEdict, true);
+
+	DETOUR_MEMBER_CALL(MultiWaitOver)();
 }
 
 bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
@@ -183,6 +194,14 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		return false;
 	}
 	detourCTraceFilterSimple->EnableDetour();
+
+	detourMultiWaitOver = DETOUR_CREATE_MEMBER(MultiWaitOver, "CTriggerMultiple_MultiWaitOver");
+	if(detourMultiWaitOver == NULL)
+	{
+		snprintf(error, maxlength, "Could not create detour for CTriggerMultiple_MultiWaitOver");
+		return false;
+	}
+	detourMultiWaitOver->EnableDetour();
 
 	// Find VTable for CTraceFilterNoNPCsOrPlayer
 	uintptr_t pCTraceFilterNoNPCsOrPlayer;
@@ -268,6 +287,12 @@ void CSSFixes::SDK_OnUnload()
 		detourCTraceFilterSimple = NULL;
 	}
 
+	if(detourMultiWaitOver != NULL)
+	{
+		detourMultiWaitOver->Destroy();
+		detourMultiWaitOver = NULL;
+	}
+
 	gameconfs->CloseGameConfigFile(g_pGameConf);
 
 	// Revert all applied patches
@@ -293,6 +318,7 @@ void CSSFixes::SDK_OnUnload()
 
 bool CSSFixes::SDK_OnMetamodLoad(ISmmAPI *ismm, char *error, size_t maxlen, bool late)
 {
+	GET_V_IFACE_CURRENT(GetEngineFactory, engine, IVEngineServer, INTERFACEVERSION_VENGINESERVER);
 	return true;
 }
 
