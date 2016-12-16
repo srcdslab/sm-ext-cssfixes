@@ -90,11 +90,15 @@ SMEXT_LINK(&g_Interface);
 
 IGameConfig *g_pGameConf = NULL;
 
+IForward *g_pOnRunThinkFunctions = NULL;
+IForward *g_pOnRunThinkFunctionsPost = NULL;
+
 CDetour *detourInputTestActivator = NULL;
 CDetour *detourPostConstructor = NULL;
 CDetour *detourFindUseEntity = NULL;
 CDetour *detourCTraceFilterSimple = NULL;
 CDetour *detourMultiWaitOver = NULL;
+CDetour *detourRunThinkFunctions = NULL;
 
 DETOUR_DECL_MEMBER1(InputTestActivator, void, inputdata_t *, inputdata)
 {
@@ -150,6 +154,17 @@ DETOUR_DECL_MEMBER0(MultiWaitOver, void)
 	DETOUR_MEMBER_CALL(MultiWaitOver)();
 }
 
+DETOUR_DECL_STATIC1(RunThinkFunctions, void, bool, simulating)
+{
+	g_pOnRunThinkFunctions->PushCell(simulating);
+	g_pOnRunThinkFunctions->Execute();
+
+	DETOUR_STATIC_CALL(RunThinkFunctions)(simulating);
+
+	g_pOnRunThinkFunctionsPost->PushCell(simulating);
+	g_pOnRunThinkFunctionsPost->Execute();
+}
+
 bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 {
 	char conf_error[255] = "";
@@ -167,41 +182,56 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	if(detourInputTestActivator == NULL)
 	{
 		snprintf(error, maxlength, "Could not create detour for CBaseFilter_InputTestActivator");
+		SDK_OnUnload();
 		return false;
 	}
-	detourInputTestActivator->EnableDetour();
 
 	detourPostConstructor = DETOUR_CREATE_MEMBER(PostConstructor, "CBaseEntity_PostConstructor");
 	if(detourPostConstructor == NULL)
 	{
 		snprintf(error, maxlength, "Could not create detour for CBaseEntity_PostConstructor");
+		SDK_OnUnload();
 		return false;
 	}
-	detourPostConstructor->EnableDetour();
 
 	detourFindUseEntity = DETOUR_CREATE_MEMBER(FindUseEntity, "CBasePlayer_FindUseEntity");
 	if(detourFindUseEntity == NULL)
 	{
 		snprintf(error, maxlength, "Could not create detour for CBasePlayer_FindUseEntity");
+		SDK_OnUnload();
 		return false;
 	}
-	detourFindUseEntity->EnableDetour();
 
 	detourCTraceFilterSimple = DETOUR_CREATE_MEMBER(CTraceFilterSimple, "CTraceFilterSimple_CTraceFilterSimple");
 	if(detourCTraceFilterSimple == NULL)
 	{
 		snprintf(error, maxlength, "Could not create detour for CTraceFilterSimple_CTraceFilterSimple");
+		SDK_OnUnload();
 		return false;
 	}
-	detourCTraceFilterSimple->EnableDetour();
 
 	detourMultiWaitOver = DETOUR_CREATE_MEMBER(MultiWaitOver, "CTriggerMultiple_MultiWaitOver");
 	if(detourMultiWaitOver == NULL)
 	{
 		snprintf(error, maxlength, "Could not create detour for CTriggerMultiple_MultiWaitOver");
+		SDK_OnUnload();
 		return false;
 	}
+
+	detourRunThinkFunctions = DETOUR_CREATE_STATIC(RunThinkFunctions, "Physics_RunThinkFunctions");
+	if(detourRunThinkFunctions == NULL)
+	{
+		snprintf(error, maxlength, "Could not create detour for Physics_RunThinkFunctions");
+		SDK_OnUnload();
+		return false;
+	}
+
+	detourInputTestActivator->EnableDetour();
+	detourPostConstructor->EnableDetour();
+	detourFindUseEntity->EnableDetour();
+	detourCTraceFilterSimple->EnableDetour();
 	detourMultiWaitOver->EnableDetour();
+	detourRunThinkFunctions->EnableDetour();
 
 	// Find VTable for CTraceFilterNoNPCsOrPlayer
 	uintptr_t pCTraceFilterNoNPCsOrPlayer;
@@ -218,6 +248,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	if(!pServerSo)
 	{
 		snprintf(error, maxlength, "Could not dlopen server_srv.so");
+		SDK_OnUnload();
 		return false;
 	}
 
@@ -258,6 +289,9 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 
 	dlclose(pServerSo);
 
+	g_pOnRunThinkFunctions = forwards->CreateForward("OnRunThinkFunctions", ET_Ignore, 1, NULL, Param_Cell);
+	g_pOnRunThinkFunctionsPost = forwards->CreateForward("OnRunThinkFunctionsPost", ET_Ignore, 1, NULL, Param_Cell);
+
 	return true;
 }
 
@@ -291,6 +325,24 @@ void CSSFixes::SDK_OnUnload()
 	{
 		detourMultiWaitOver->Destroy();
 		detourMultiWaitOver = NULL;
+	}
+
+	if(detourRunThinkFunctions != NULL)
+	{
+		detourRunThinkFunctions->Destroy();
+		detourRunThinkFunctions = NULL;
+	}
+
+	if(g_pOnRunThinkFunctions != NULL)
+	{
+		forwards->ReleaseForward(g_pOnRunThinkFunctions);
+		g_pOnRunThinkFunctions = NULL;
+	}
+
+	if(g_pOnRunThinkFunctionsPost != NULL)
+	{
+		forwards->ReleaseForward(g_pOnRunThinkFunctionsPost);
+		g_pOnRunThinkFunctionsPost = NULL;
 	}
 
 	gameconfs->CloseGameConfigFile(g_pGameConf);

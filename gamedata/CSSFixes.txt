@@ -39,6 +39,12 @@
 				"library"	"server"
 				"linux"		"@_ZN16CTriggerMultiple13MultiWaitOverEv"
 			}
+
+			"Physics_RunThinkFunctions"
+			{
+				"library"	"server"
+				"linux"		"@_Z25Physics_RunThinkFunctionsb"
+			}
 		}
 	}
 }
