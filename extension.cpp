@@ -57,6 +57,20 @@ static struct SrcdsPatch
 		"xxxxxxxxxxxxxx",
 		(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
 		0, 0, 0
+	},
+	{
+		"_ZN9CCSPlayer19EntSelectSpawnPointEv",
+		(unsigned char *)"\x89\x1C\x24\xE8\x00\x00\x00\x00\x83\xF8\x03\x74\x4B",
+		"xxxx????xxxxx",
+		(unsigned char *)"\x89\x1C\x24\x90\x90\x90\x90\x90\x90\x90\x90\xEB\x4B",
+		0, 0, 0
+	},
+	{
+		"_ZN12CCSGameRules18NeededPlayersCheckERb",
+		(unsigned char *)"\x74\x0E\x8B\x83\x80\x02\x00\x00\x85\xC0\x0F\x85\x9E\x00\x00\x00\xC7\x04\x24\xAC\xF7\x87\x00\xE8\xC2\x82\x91\x00",
+		"xxxxxxxxxxxxxxxx????????????",
+		(unsigned char *)"\x0F\x85\xA8\x00\x00\x00\x8B\x83\x80\x02\x00\x00\x85\xC0\x0F\x85\x9A\x00\x00\x00\x90\x90\x90\x90\x90\x90\x90\x90",
+		0, 0, 0
 	}
 };
 
@@ -99,6 +113,7 @@ CDetour *detourFindUseEntity = NULL;
 CDetour *detourCTraceFilterSimple = NULL;
 CDetour *detourMultiWaitOver = NULL;
 CDetour *detourRunThinkFunctions = NULL;
+CDetour *detourKeyValue = NULL;
 
 DETOUR_DECL_MEMBER1(InputTestActivator, void, inputdata_t *, inputdata)
 {
@@ -110,7 +125,7 @@ DETOUR_DECL_MEMBER1(InputTestActivator, void, inputdata_t *, inputdata)
 
 DETOUR_DECL_MEMBER1(PostConstructor, void, const char *, szClassname)
 {
-	if(strncmp(szClassname, "info_player_", 12) == 0)
+	if(strncasecmp(szClassname, "info_player_", 12) == 0)
 	{
 		CBaseEntity *pEntity = (CBaseEntity *)this;
 
@@ -118,9 +133,24 @@ DETOUR_DECL_MEMBER1(PostConstructor, void, const char *, szClassname)
 		typedescription_t *td = gamehelpers->FindInDataMap(pMap, "m_iEFlags");
 
 		*(uint32 *)((intptr_t)pEntity + td->fieldOffset[TD_OFFSET_NORMAL]) |= (1<<9); // EFL_SERVER_ONLY
+		szClassname = "info_player_counterterrorist";
 	}
 
 	DETOUR_MEMBER_CALL(PostConstructor)(szClassname);
+}
+
+DETOUR_DECL_MEMBER2(KeyValue, bool, const char *, szKeyName, const char *, szValue)
+{
+	if(strcasecmp(szKeyName, "angle") == 0)
+		szKeyName = "angles";
+
+	else if(strcasecmp(szKeyName, "classname") == 0 &&
+		strncasecmp(szValue, "info_player_", 12) == 0)
+	{
+		szValue = "info_player_counterterrorist";
+	}
+
+	return DETOUR_MEMBER_CALL(KeyValue)(szKeyName, szValue);
 }
 
 volatile bool gv_InFindUseEntity = false;
@@ -226,12 +256,21 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		return false;
 	}
 
+	detourKeyValue = DETOUR_CREATE_MEMBER(KeyValue, "CBaseEntity_KeyValue");
+	if(detourKeyValue == NULL)
+	{
+		snprintf(error, maxlength, "Could not create detour for CBaseEntity_KeyValue");
+		SDK_OnUnload();
+		return false;
+	}
+
 	detourInputTestActivator->EnableDetour();
 	detourPostConstructor->EnableDetour();
 	detourFindUseEntity->EnableDetour();
 	detourCTraceFilterSimple->EnableDetour();
 	detourMultiWaitOver->EnableDetour();
 	detourRunThinkFunctions->EnableDetour();
+	detourKeyValue->EnableDetour();
 
 	// Find VTable for CTraceFilterNoNPCsOrPlayer
 	uintptr_t pCTraceFilterNoNPCsOrPlayer;
@@ -331,6 +370,12 @@ void CSSFixes::SDK_OnUnload()
 	{
 		detourRunThinkFunctions->Destroy();
 		detourRunThinkFunctions = NULL;
+	}
+
+	if(detourKeyValue != NULL)
+	{
+		detourKeyValue->Destroy();
+		detourKeyValue = NULL;
 	}
 
 	if(g_pOnRunThinkFunctions != NULL)

@@ -45,6 +45,12 @@
 				"library"	"server"
 				"linux"		"@_Z25Physics_RunThinkFunctionsb"
 			}
+
+			"CBaseEntity_KeyValue"
+			{
+				"library"	"server"
+				"linux"		"@_ZN11CBaseEntity8KeyValueEPKcS1_"
+			}
 		}
 	}
 }
