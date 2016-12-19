@@ -123,6 +123,7 @@ DETOUR_DECL_MEMBER1(InputTestActivator, void, inputdata_t *, inputdata)
 	DETOUR_MEMBER_CALL(InputTestActivator)(inputdata);
 }
 
+char *g_pInfoPlayerCounterterroristStr = NULL;
 DETOUR_DECL_MEMBER1(PostConstructor, void, const char *, szClassname)
 {
 	if(strncasecmp(szClassname, "info_player_", 12) == 0)
@@ -133,7 +134,9 @@ DETOUR_DECL_MEMBER1(PostConstructor, void, const char *, szClassname)
 		typedescription_t *td = gamehelpers->FindInDataMap(pMap, "m_iEFlags");
 
 		*(uint32 *)((intptr_t)pEntity + td->fieldOffset[TD_OFFSET_NORMAL]) |= (1<<9); // EFL_SERVER_ONLY
-		szClassname = "info_player_counterterrorist";
+
+		if(strcasecmp(szClassname, "info_player_terrorist") == 0)
+			szClassname = g_pInfoPlayerCounterterroristStr;
 	}
 
 	DETOUR_MEMBER_CALL(PostConstructor)(szClassname);
@@ -145,9 +148,9 @@ DETOUR_DECL_MEMBER2(KeyValue, bool, const char *, szKeyName, const char *, szVal
 		szKeyName = "angles";
 
 	else if(strcasecmp(szKeyName, "classname") == 0 &&
-		strncasecmp(szValue, "info_player_", 12) == 0)
+		strcasecmp(szValue, "info_player_terrorist") == 0)
 	{
-		szValue = "info_player_counterterrorist";
+		szValue = g_pInfoPlayerCounterterroristStr;
 	}
 
 	return DETOUR_MEMBER_CALL(KeyValue)(szKeyName, szValue);
@@ -330,6 +333,10 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 
 	g_pOnRunThinkFunctions = forwards->CreateForward("OnRunThinkFunctions", ET_Ignore, 1, NULL, Param_Cell);
 	g_pOnRunThinkFunctionsPost = forwards->CreateForward("OnRunThinkFunctionsPost", ET_Ignore, 1, NULL, Param_Cell);
+
+	const char aStr[] = "info_player_counterterrorist";
+	g_pInfoPlayerCounterterroristStr = (char *)malloc(sizeof(aStr));
+	memcpy(g_pInfoPlayerCounterterroristStr, aStr, sizeof(aStr));
 
 	return true;
 }
