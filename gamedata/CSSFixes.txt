@@ -34,6 +34,18 @@
 				"linux"		"@_ZTV26CTraceFilterNoNPCsOrPlayer"
 			}
 
+			"CTraceFilterSkipTwoEntities"
+			{
+				"library"	"server"
+				"linux"		"@_ZTV27CTraceFilterSkipTwoEntities"
+			}
+
+			"CTraceFilterSkipTwoEntities_CTraceFilterSkipTwoEntities"
+			{
+				"library"	"server"
+				"linux"		"@_ZN27CTraceFilterSkipTwoEntitiesC2EPK13IHandleEntityS2_i"
+			}
+
 			"CTriggerMultiple_MultiWaitOver"
 			{
 				"library"	"server"
@@ -50,6 +62,12 @@
 			{
 				"library"	"server"
 				"linux"		"@_ZN11CBaseEntity8KeyValueEPKcS1_"
+			}
+
+			"FX_FireBullets"
+			{
+				"library"	"server"
+				"linux"		"@_Z14FX_FireBulletsiRK6VectorRK6QAngleiiifff"
 			}
 		}
 	}

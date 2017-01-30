@@ -31,7 +31,25 @@
 
 #include "extension.h"
 #include "CDetour/detours.h"
+#include "iplayerinfo.h"
+#include <sourcehook.h>
 #include <sh_memory.h>
+#include <IEngineTrace.h>
+
+class CTraceFilterSimple : public CTraceFilter
+{
+public:
+	virtual bool ShouldHitEntity( IHandleEntity *pHandleEntity, int contentsMask ) = 0;
+	virtual void SetPassEntity( const IHandleEntity *pPassEntity ) = 0;
+	virtual void SetCollisionGroup( int iCollisionGroup ) = 0;
+};
+
+class CTraceFilterSkipTwoEntities : public CTraceFilterSimple
+{
+public:
+	virtual bool ShouldHitEntity( IHandleEntity *pHandleEntity, int contentsMask ) = 0;
+	virtual void SetPassEntity2( const IHandleEntity *pPassEntity2 ) = 0;
+};
 
 static struct SrcdsPatch
 {
@@ -92,6 +110,8 @@ struct inputdata_t
 	int nOutputID;
 };
 
+typedef bool (*ShouldHitFunc_t)( IHandleEntity *pHandleEntity, int contentsMask );
+
 uintptr_t FindPattern(uintptr_t BaseAddr, const unsigned char *pData, const char *pPattern, size_t MaxSize);
 
 /**
@@ -107,23 +127,28 @@ IGameConfig *g_pGameConf = NULL;
 IForward *g_pOnRunThinkFunctions = NULL;
 IForward *g_pOnRunThinkFunctionsPost = NULL;
 
-CDetour *detourInputTestActivator = NULL;
-CDetour *detourPostConstructor = NULL;
-CDetour *detourFindUseEntity = NULL;
-CDetour *detourCTraceFilterSimple = NULL;
-CDetour *detourMultiWaitOver = NULL;
-CDetour *detourRunThinkFunctions = NULL;
-CDetour *detourKeyValue = NULL;
+CDetour *g_pDetour_InputTestActivator = NULL;
+CDetour *g_pDetour_PostConstructor = NULL;
+CDetour *g_pDetour_FindUseEntity = NULL;
+CDetour *g_pDetour_CTraceFilterSimple = NULL;
+CDetour *g_pDetour_MultiWaitOver = NULL;
+CDetour *g_pDetour_RunThinkFunctions = NULL;
+CDetour *g_pDetour_KeyValue = NULL;
+CDetour *g_pDetour_FireBullets = NULL;
+int g_SH_ShouldHitEntity = 0;
 
-DETOUR_DECL_MEMBER1(InputTestActivator, void, inputdata_t *, inputdata)
+uintptr_t g_CTraceFilterNoNPCsOrPlayer = 0;
+CTraceFilterSkipTwoEntities *g_CTraceFilterSkipTwoEntities = NULL;
+
+DETOUR_DECL_MEMBER1(DETOUR_InputTestActivator, void, inputdata_t *, inputdata)
 {
 	if(!inputdata || !inputdata->pActivator || !inputdata->pCaller)
 		return;
 
-	DETOUR_MEMBER_CALL(InputTestActivator)(inputdata);
+	DETOUR_MEMBER_CALL(DETOUR_InputTestActivator)(inputdata);
 }
 
-DETOUR_DECL_MEMBER1(PostConstructor, void, const char *, szClassname)
+DETOUR_DECL_MEMBER1(DETOUR_PostConstructor, void, const char *, szClassname)
 {
 	if(strncasecmp(szClassname, "info_player_", 12) == 0)
 	{
@@ -132,66 +157,134 @@ DETOUR_DECL_MEMBER1(PostConstructor, void, const char *, szClassname)
 		datamap_t *pMap = gamehelpers->GetDataMap(pEntity);
 		typedescription_t *td = gamehelpers->FindInDataMap(pMap, "m_iEFlags");
 
+		// Spawnpoints don't need edicts...
 		*(uint32 *)((intptr_t)pEntity + td->fieldOffset[TD_OFFSET_NORMAL]) |= (1<<9); // EFL_SERVER_ONLY
 
+		// Only CT spawnpoints
 		if(strcasecmp(szClassname, "info_player_terrorist") == 0)
 			szClassname = "info_player_counterterrorist";
 	}
 
-	DETOUR_MEMBER_CALL(PostConstructor)(szClassname);
+	DETOUR_MEMBER_CALL(DETOUR_PostConstructor)(szClassname);
 }
 
-DETOUR_DECL_MEMBER2(KeyValue, bool, const char *, szKeyName, const char *, szValue)
+DETOUR_DECL_MEMBER2(DETOUR_KeyValue, bool, const char *, szKeyName, const char *, szValue)
 {
+	// Fix crash bug in engine
 	if(strcasecmp(szKeyName, "angle") == 0)
 		szKeyName = "angles";
 
 	else if(strcasecmp(szKeyName, "classname") == 0 &&
 		strcasecmp(szValue, "info_player_terrorist") == 0)
 	{
+		// Only CT spawnpoints
 		szValue = "info_player_counterterrorist";
 	}
+	else if(strcasecmp(szKeyName, "teamnum") == 0 || strcasecmp(szKeyName, "teamnum") == 0 )
+	{
+		CBaseEntity *pEntity = (CBaseEntity *)this;
+		const char *pClassname = gamehelpers->GetEntityClassname(pEntity);
 
-	return DETOUR_MEMBER_CALL(KeyValue)(szKeyName, szValue);
+		// All buyzones should be CT buyzones
+		if(pClassname && strcasecmp(pClassname, "func_buyzone") == 0)
+			szValue = "3";
+	}
+
+	return DETOUR_MEMBER_CALL(DETOUR_KeyValue)(szKeyName, szValue);
 }
 
 volatile bool gv_InFindUseEntity = false;
-DETOUR_DECL_MEMBER0(FindUseEntity, CBaseEntity *)
+DETOUR_DECL_MEMBER0(DETOUR_FindUseEntity, CBaseEntity *)
 {
 	// Signal CTraceFilterSimple that we are in FindUseEntity
 	gv_InFindUseEntity = true;
-	CBaseEntity *pEntity = DETOUR_MEMBER_CALL(FindUseEntity)();
+	CBaseEntity *pEntity = DETOUR_MEMBER_CALL(DETOUR_FindUseEntity)();
 	gv_InFindUseEntity = false;
 	return pEntity;
 }
 
-uintptr_t g_CTraceFilterNoNPCsOrPlayer = 0;
-typedef bool (*ShouldHitFunc_t)( IHandleEntity *pHandleEntity, int contentsMask );
-DETOUR_DECL_MEMBER3(CTraceFilterSimple, void, const IHandleEntity *, passedict, int, collisionGroup, ShouldHitFunc_t, pExtraShouldHitFunc)
+SH_DECL_HOOK2(CTraceFilterSkipTwoEntities, ShouldHitEntity, SH_NOATTRIB, 0, bool, IHandleEntity *, int);
+
+volatile bool gv_InFireBullets = false;
+volatile int gv_FireBulletPlayerTeam = 0;
+bool ShouldHitEntity(IHandleEntity *pHandleEntity, int contentsMask)
 {
-	DETOUR_MEMBER_CALL(CTraceFilterSimple)(passedict, collisionGroup, pExtraShouldHitFunc);
+	if(!gv_InFireBullets)
+		return true;
+
+	if(META_RESULT_ORIG_RET(bool) == false)
+		return false;
+
+	IServerUnknown *pUnk = (IServerUnknown *)pHandleEntity;
+
+	IServerNetworkable *pNetworkAble = pUnk->GetNetworkable();
+	if(!pNetworkAble)
+		RETURN_META_VALUE(MRES_IGNORED, true);
+
+	edict_t *pEdict = pNetworkAble->GetEdict();
+	if(!pEdict)
+		RETURN_META_VALUE(MRES_IGNORED, true);
+
+	IGamePlayer *pPlayer = playerhelpers->GetGamePlayer(pEdict);
+	if(!pPlayer)
+		RETURN_META_VALUE(MRES_IGNORED, true);
+
+	IPlayerInfo *pInfo = pPlayer->GetPlayerInfo();
+	if(!pInfo)
+		RETURN_META_VALUE(MRES_IGNORED, true);
+
+	int iTeam = pInfo->GetTeamIndex();
+	if(iTeam == gv_FireBulletPlayerTeam)
+		RETURN_META_VALUE(MRES_SUPERCEDE, false);
+
+	RETURN_META_VALUE(MRES_IGNORED, true);
+}
+
+DETOUR_DECL_STATIC7(DETOUR_FireBullets, void, int, iPlayerIndex, const Vector *, vOrigin, const QAngle *, vAngles, int, iWeaponID, int, iMode, int, iSeed, float, flSpread)
+{
+	if(iPlayerIndex <= 0 || iPlayerIndex > playerhelpers->GetMaxClients())
+		return DETOUR_STATIC_CALL(DETOUR_FireBullets)(iPlayerIndex, vOrigin, vAngles, iWeaponID, iMode, iSeed, flSpread);
+
+	IGamePlayer *pPlayer = playerhelpers->GetGamePlayer(iPlayerIndex);
+	if(!pPlayer)
+		return DETOUR_STATIC_CALL(DETOUR_FireBullets)(iPlayerIndex, vOrigin, vAngles, iWeaponID, iMode, iSeed, flSpread);
+
+	IPlayerInfo *pInfo = pPlayer->GetPlayerInfo();
+	if(!pInfo)
+		return DETOUR_STATIC_CALL(DETOUR_FireBullets)(iPlayerIndex, vOrigin, vAngles, iWeaponID, iMode, iSeed, flSpread);
+
+	gv_FireBulletPlayerTeam = pInfo->GetTeamIndex();
+
+	gv_InFireBullets = true;
+	DETOUR_STATIC_CALL(DETOUR_FireBullets)(iPlayerIndex, vOrigin, vAngles, iWeaponID, iMode, iSeed, flSpread);
+	gv_InFireBullets = false;
+}
+
+DETOUR_DECL_MEMBER3(DETOUR_CTraceFilterSimple, void, const IHandleEntity *, passedict, int, collisionGroup, ShouldHitFunc_t, pExtraShouldHitFunc)
+{
+	DETOUR_MEMBER_CALL(DETOUR_CTraceFilterSimple)(passedict, collisionGroup, pExtraShouldHitFunc);
 
 	// If we're in FindUseEntity right now then switch out the VTable
 	if(gv_InFindUseEntity)
 		*(uintptr_t *)this = g_CTraceFilterNoNPCsOrPlayer;
 }
 
-DETOUR_DECL_MEMBER0(MultiWaitOver, void)
+DETOUR_DECL_MEMBER0(DETOUR_MultiWaitOver, void)
 {
 	CBaseEntity *pEntity = (CBaseEntity *)this;
 	edict_t *pEdict = gamehelpers->EdictOfIndex(gamehelpers->EntityToBCompatRef(pEntity));
 	if(pEdict)
 		engine->TriggerMoved(pEdict, true);
 
-	DETOUR_MEMBER_CALL(MultiWaitOver)();
+	DETOUR_MEMBER_CALL(DETOUR_MultiWaitOver)();
 }
 
-DETOUR_DECL_STATIC1(RunThinkFunctions, void, bool, simulating)
+DETOUR_DECL_STATIC1(DETOUR_RunThinkFunctions, void, bool, simulating)
 {
 	g_pOnRunThinkFunctions->PushCell(simulating);
 	g_pOnRunThinkFunctions->Execute();
 
-	DETOUR_STATIC_CALL(RunThinkFunctions)(simulating);
+	DETOUR_STATIC_CALL(DETOUR_RunThinkFunctions)(simulating);
 
 	g_pOnRunThinkFunctionsPost->PushCell(simulating);
 	g_pOnRunThinkFunctionsPost->Execute();
@@ -210,69 +303,89 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 
 	CDetourManager::Init(g_pSM->GetScriptingEngine(), g_pGameConf);
 
-	detourInputTestActivator = DETOUR_CREATE_MEMBER(InputTestActivator, "CBaseFilter_InputTestActivator");
-	if(detourInputTestActivator == NULL)
+	g_pDetour_InputTestActivator = DETOUR_CREATE_MEMBER(DETOUR_InputTestActivator, "CBaseFilter_InputTestActivator");
+	if(g_pDetour_InputTestActivator == NULL)
 	{
 		snprintf(error, maxlength, "Could not create detour for CBaseFilter_InputTestActivator");
 		SDK_OnUnload();
 		return false;
 	}
 
-	detourPostConstructor = DETOUR_CREATE_MEMBER(PostConstructor, "CBaseEntity_PostConstructor");
-	if(detourPostConstructor == NULL)
+	g_pDetour_PostConstructor = DETOUR_CREATE_MEMBER(DETOUR_PostConstructor, "CBaseEntity_PostConstructor");
+	if(g_pDetour_PostConstructor == NULL)
 	{
 		snprintf(error, maxlength, "Could not create detour for CBaseEntity_PostConstructor");
 		SDK_OnUnload();
 		return false;
 	}
 
-	detourFindUseEntity = DETOUR_CREATE_MEMBER(FindUseEntity, "CBasePlayer_FindUseEntity");
-	if(detourFindUseEntity == NULL)
+	g_pDetour_FindUseEntity = DETOUR_CREATE_MEMBER(DETOUR_FindUseEntity, "CBasePlayer_FindUseEntity");
+	if(g_pDetour_FindUseEntity == NULL)
 	{
 		snprintf(error, maxlength, "Could not create detour for CBasePlayer_FindUseEntity");
 		SDK_OnUnload();
 		return false;
 	}
 
-	detourCTraceFilterSimple = DETOUR_CREATE_MEMBER(CTraceFilterSimple, "CTraceFilterSimple_CTraceFilterSimple");
-	if(detourCTraceFilterSimple == NULL)
+	g_pDetour_CTraceFilterSimple = DETOUR_CREATE_MEMBER(DETOUR_CTraceFilterSimple, "CTraceFilterSimple_CTraceFilterSimple");
+	if(g_pDetour_CTraceFilterSimple == NULL)
 	{
 		snprintf(error, maxlength, "Could not create detour for CTraceFilterSimple_CTraceFilterSimple");
 		SDK_OnUnload();
 		return false;
 	}
 
-	detourMultiWaitOver = DETOUR_CREATE_MEMBER(MultiWaitOver, "CTriggerMultiple_MultiWaitOver");
-	if(detourMultiWaitOver == NULL)
+	g_pDetour_MultiWaitOver = DETOUR_CREATE_MEMBER(DETOUR_MultiWaitOver, "CTriggerMultiple_MultiWaitOver");
+	if(g_pDetour_MultiWaitOver == NULL)
 	{
 		snprintf(error, maxlength, "Could not create detour for CTriggerMultiple_MultiWaitOver");
 		SDK_OnUnload();
 		return false;
 	}
 
-	detourRunThinkFunctions = DETOUR_CREATE_STATIC(RunThinkFunctions, "Physics_RunThinkFunctions");
-	if(detourRunThinkFunctions == NULL)
+	g_pDetour_RunThinkFunctions = DETOUR_CREATE_STATIC(DETOUR_RunThinkFunctions, "Physics_RunThinkFunctions");
+	if(g_pDetour_RunThinkFunctions == NULL)
 	{
 		snprintf(error, maxlength, "Could not create detour for Physics_RunThinkFunctions");
 		SDK_OnUnload();
 		return false;
 	}
 
-	detourKeyValue = DETOUR_CREATE_MEMBER(KeyValue, "CBaseEntity_KeyValue");
-	if(detourKeyValue == NULL)
+	g_pDetour_KeyValue = DETOUR_CREATE_MEMBER(DETOUR_KeyValue, "CBaseEntity_KeyValue");
+	if(g_pDetour_KeyValue == NULL)
 	{
 		snprintf(error, maxlength, "Could not create detour for CBaseEntity_KeyValue");
 		SDK_OnUnload();
 		return false;
 	}
 
-	detourInputTestActivator->EnableDetour();
-	detourPostConstructor->EnableDetour();
-	detourFindUseEntity->EnableDetour();
-	detourCTraceFilterSimple->EnableDetour();
-	detourMultiWaitOver->EnableDetour();
-	detourRunThinkFunctions->EnableDetour();
-	detourKeyValue->EnableDetour();
+	g_pDetour_FireBullets = DETOUR_CREATE_STATIC(DETOUR_FireBullets, "FX_FireBullets");
+	if(g_pDetour_FireBullets == NULL)
+	{
+		snprintf(error, maxlength, "Could not create detour for FX_FireBullets");
+		SDK_OnUnload();
+		return false;
+	}
+
+	g_pDetour_InputTestActivator->EnableDetour();
+	g_pDetour_PostConstructor->EnableDetour();
+	g_pDetour_FindUseEntity->EnableDetour();
+	g_pDetour_CTraceFilterSimple->EnableDetour();
+	g_pDetour_MultiWaitOver->EnableDetour();
+	g_pDetour_RunThinkFunctions->EnableDetour();
+	g_pDetour_KeyValue->EnableDetour();
+	g_pDetour_FireBullets->EnableDetour();
+
+	// Find VTable for CTraceFilterSkipTwoEntities
+	uintptr_t pCTraceFilterSkipTwoEntities;
+	if(!g_pGameConf->GetMemSig("CTraceFilterSkipTwoEntities", (void **)(&pCTraceFilterSkipTwoEntities)) || !pCTraceFilterSkipTwoEntities)
+	{
+		snprintf(error, maxlength, "Failed to find CTraceFilterSkipTwoEntities.\n");
+		SDK_OnUnload();
+		return false;
+	}
+	// First function in VTable
+	g_CTraceFilterSkipTwoEntities = (CTraceFilterSkipTwoEntities *)(pCTraceFilterSkipTwoEntities + 8);
 
 	// Find VTable for CTraceFilterNoNPCsOrPlayer
 	uintptr_t pCTraceFilterNoNPCsOrPlayer;
@@ -284,6 +397,8 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	}
 	// First function in VTable
 	g_CTraceFilterNoNPCsOrPlayer = pCTraceFilterNoNPCsOrPlayer + 8;
+
+	g_SH_ShouldHitEntity = SH_ADD_DVPHOOK(CTraceFilterSkipTwoEntities, ShouldHitEntity, g_CTraceFilterSkipTwoEntities, SH_STATIC(ShouldHitEntity), true);
 
 	void *pServerSo = dlopen("cstrike/bin/server_srv.so", RTLD_NOW);
 	if(!pServerSo)
@@ -338,46 +453,52 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 
 void CSSFixes::SDK_OnUnload()
 {
-	if(detourInputTestActivator != NULL)
+	if(g_pDetour_InputTestActivator != NULL)
 	{
-		detourInputTestActivator->Destroy();
-		detourInputTestActivator = NULL;
+		g_pDetour_InputTestActivator->Destroy();
+		g_pDetour_InputTestActivator = NULL;
 	}
 
-	if(detourPostConstructor != NULL)
+	if(g_pDetour_PostConstructor != NULL)
 	{
-		detourPostConstructor->Destroy();
-		detourPostConstructor = NULL;
+		g_pDetour_PostConstructor->Destroy();
+		g_pDetour_PostConstructor = NULL;
 	}
 
-	if(detourFindUseEntity != NULL)
+	if(g_pDetour_FindUseEntity != NULL)
 	{
-		detourFindUseEntity->Destroy();
-		detourFindUseEntity = NULL;
+		g_pDetour_FindUseEntity->Destroy();
+		g_pDetour_FindUseEntity = NULL;
 	}
 
-	if(detourCTraceFilterSimple != NULL)
+	if(g_pDetour_CTraceFilterSimple != NULL)
 	{
-		detourCTraceFilterSimple->Destroy();
-		detourCTraceFilterSimple = NULL;
+		g_pDetour_CTraceFilterSimple->Destroy();
+		g_pDetour_CTraceFilterSimple = NULL;
 	}
 
-	if(detourMultiWaitOver != NULL)
+	if(g_pDetour_MultiWaitOver != NULL)
 	{
-		detourMultiWaitOver->Destroy();
-		detourMultiWaitOver = NULL;
+		g_pDetour_MultiWaitOver->Destroy();
+		g_pDetour_MultiWaitOver = NULL;
 	}
 
-	if(detourRunThinkFunctions != NULL)
+	if(g_pDetour_RunThinkFunctions != NULL)
 	{
-		detourRunThinkFunctions->Destroy();
-		detourRunThinkFunctions = NULL;
+		g_pDetour_RunThinkFunctions->Destroy();
+		g_pDetour_RunThinkFunctions = NULL;
 	}
 
-	if(detourKeyValue != NULL)
+	if(g_pDetour_KeyValue != NULL)
 	{
-		detourKeyValue->Destroy();
-		detourKeyValue = NULL;
+		g_pDetour_KeyValue->Destroy();
+		g_pDetour_KeyValue = NULL;
+	}
+
+	if(g_pDetour_FireBullets != NULL)
+	{
+		g_pDetour_FireBullets->Destroy();
+		g_pDetour_FireBullets = NULL;
 	}
 
 	if(g_pOnRunThinkFunctions != NULL)
@@ -391,6 +512,9 @@ void CSSFixes::SDK_OnUnload()
 		forwards->ReleaseForward(g_pOnRunThinkFunctionsPost);
 		g_pOnRunThinkFunctionsPost = NULL;
 	}
+
+	if(g_SH_ShouldHitEntity)
+		SH_REMOVE_HOOK_ID(g_SH_ShouldHitEntity);
 
 	gameconfs->CloseGameConfigFile(g_pGameConf);
 
