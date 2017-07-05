@@ -40,16 +40,16 @@
 				"linux"		"@_ZTV27CTraceFilterSkipTwoEntities"
 			}
 
+			"CTraceFilterSimple"
+			{
+				"library"	"server"
+				"linux"		"@_ZTV18CTraceFilterSimple"
+			}
+
 			"CTraceFilterSkipTwoEntities_CTraceFilterSkipTwoEntities"
 			{
 				"library"	"server"
 				"linux"		"@_ZN27CTraceFilterSkipTwoEntitiesC2EPK13IHandleEntityS2_i"
-			}
-
-			"CTriggerMultiple_MultiWaitOver"
-			{
-				"library"	"server"
-				"linux"		"@_ZN16CTriggerMultiple13MultiWaitOverEv"
 			}
 
 			"Physics_RunThinkFunctions"
@@ -68,6 +68,18 @@
 			{
 				"library"	"server"
 				"linux"		"@_Z14FX_FireBulletsiRK6VectorRK6QAngleiiifff"
+			}
+
+			"Physics_SimulateEntity"
+			{
+				"library"	"server"
+				"linux"		"@_Z22Physics_SimulateEntityP11CBaseEntity"
+			}
+
+			"CKnife_SwingOrStab"
+			{
+				"library"	"server"
+				"linux"		"@_ZN6CKnife11SwingOrStabEb"
 			}
 		}
 	}

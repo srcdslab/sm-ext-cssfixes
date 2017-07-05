@@ -35,6 +35,39 @@
 #include <sourcehook.h>
 #include <sh_memory.h>
 #include <IEngineTrace.h>
+#include <server_class.h>
+
+bool UTIL_ContainsDataTable(SendTable *pTable, const char *name)
+{
+	const char *pname = pTable->GetName();
+	int props = pTable->GetNumProps();
+	SendProp *prop;
+	SendTable *table;
+
+	if (pname && strcmp(name, pname) == 0)
+		return true;
+
+	for (int i=0; i<props; i++)
+	{
+		prop = pTable->GetProp(i);
+
+		if ((table = prop->GetDataTable()) != NULL)
+		{
+			pname = table->GetName();
+			if (pname && strcmp(name, pname) == 0)
+			{
+				return true;
+			}
+
+			if (UTIL_ContainsDataTable(table, name))
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
 
 class CTraceFilterSimple : public CTraceFilter
 {
@@ -62,6 +95,7 @@ static struct SrcdsPatch
 	uintptr_t pAddress;
 	uintptr_t pPatchAddress;
 } gs_Patches[] = {
+	// 0
 	{
 		"_ZN7CGameUI5ThinkEv",
 		(unsigned char *)"\xC7\x44\x24\x04\x10\x00\x00\x00\x89\x34\x24\xE8\x00\x00\x00\x00",
@@ -69,6 +103,7 @@ static struct SrcdsPatch
 		(unsigned char *)"\xC7\x44\x24\x04\x10\x00\x00\x00\x89\x34\x24\x90\x90\x90\x90\x90",
 		0, 0, 0
 	},
+	// 1
 	{
 		"_ZN17CMovementSpeedMod13InputSpeedModER11inputdata_t",
 		(unsigned char *)"\xFF\x90\x8C\x05\x00\x00\x85\xC0\x0F\x85\x75\x02\x00\x00",
@@ -76,6 +111,7 @@ static struct SrcdsPatch
 		(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
 		0, 0, 0
 	},
+	// 2
 	{
 		"_ZN9CCSPlayer19EntSelectSpawnPointEv",
 		(unsigned char *)"\x89\x1C\x24\xE8\x00\x00\x00\x00\x83\xF8\x03\x74\x4B",
@@ -83,11 +119,20 @@ static struct SrcdsPatch
 		(unsigned char *)"\x89\x1C\x24\x90\x90\x90\x90\x90\x90\x90\x90\xEB\x4B",
 		0, 0, 0
 	},
+	// 3
 	{
 		"_ZN12CCSGameRules18NeededPlayersCheckERb",
 		(unsigned char *)"\x74\x0E\x8B\x83\x80\x02\x00\x00\x85\xC0\x0F\x85\x9E\x00\x00\x00\xC7\x04\x24\xAC\xF7\x87\x00\xE8\xC2\x82\x91\x00",
 		"xxxxxxxxxxxxxxxx????????????",
 		(unsigned char *)"\x0F\x85\xA8\x00\x00\x00\x8B\x83\x80\x02\x00\x00\x85\xC0\x0F\x85\x9A\x00\x00\x00\x90\x90\x90\x90\x90\x90\x90\x90",
+		0, 0, 0
+	},
+	// 4: Special
+	{
+		"_Z25Physics_RunThinkFunctionsb",
+		(unsigned char *)"\x8B\x04\x9E\x85\xC0\x74\x13\xA1\x00\x00\x00\x00\x89\x78\x0C\x8B\x04\x9E\x89\x04\x24\xE8\x00\x00\x00\x00",
+		"xxxxxxxx????xxxxxxxxxx????",
+		NULL,
 		0, 0, 0
 	}
 };
@@ -113,6 +158,7 @@ struct inputdata_t
 typedef bool (*ShouldHitFunc_t)( IHandleEntity *pHandleEntity, int contentsMask );
 
 uintptr_t FindPattern(uintptr_t BaseAddr, const unsigned char *pData, const char *pPattern, size_t MaxSize);
+uintptr_t FindFunctionCall(uintptr_t BaseAddr, uintptr_t Function, size_t MaxSize);
 
 /**
  * @file extension.cpp
@@ -122,6 +168,7 @@ uintptr_t FindPattern(uintptr_t BaseAddr, const unsigned char *pData, const char
 CSSFixes g_Interface;
 SMEXT_LINK(&g_Interface);
 
+CGlobalVars *gpGlobals = NULL;
 IGameConfig *g_pGameConf = NULL;
 
 IForward *g_pOnRunThinkFunctions = NULL;
@@ -131,15 +178,18 @@ CDetour *g_pDetour_InputTestActivator = NULL;
 CDetour *g_pDetour_PostConstructor = NULL;
 CDetour *g_pDetour_FindUseEntity = NULL;
 CDetour *g_pDetour_CTraceFilterSimple = NULL;
-CDetour *g_pDetour_MultiWaitOver = NULL;
 CDetour *g_pDetour_RunThinkFunctions = NULL;
 CDetour *g_pDetour_KeyValue = NULL;
 CDetour *g_pDetour_FireBullets = NULL;
-int g_SH_ShouldHitEntity = 0;
+CDetour *g_pDetour_SwingOrStab = NULL;
+int g_SH_SkipTwoEntitiesShouldHitEntity = 0;
+int g_SH_SimpleShouldHitEntity = 0;
 
 uintptr_t g_CTraceFilterNoNPCsOrPlayer = 0;
 CTraceFilterSkipTwoEntities *g_CTraceFilterSkipTwoEntities = NULL;
+CTraceFilterSimple *g_CTraceFilterSimple = NULL;
 
+/* Fix crash in CBaseFilter::InputTestActivator */
 DETOUR_DECL_MEMBER1(DETOUR_InputTestActivator, void, inputdata_t *, inputdata)
 {
 	if(!inputdata || !inputdata->pActivator || !inputdata->pCaller)
@@ -193,6 +243,7 @@ DETOUR_DECL_MEMBER2(DETOUR_KeyValue, bool, const char *, szKeyName, const char *
 	return DETOUR_MEMBER_CALL(DETOUR_KeyValue)(szKeyName, szValue);
 }
 
+/* Ignore players in +USE trace */
 volatile bool gv_InFindUseEntity = false;
 DETOUR_DECL_MEMBER0(DETOUR_FindUseEntity, CBaseEntity *)
 {
@@ -202,11 +253,20 @@ DETOUR_DECL_MEMBER0(DETOUR_FindUseEntity, CBaseEntity *)
 	gv_InFindUseEntity = false;
 	return pEntity;
 }
+DETOUR_DECL_MEMBER3(DETOUR_CTraceFilterSimple, void, const IHandleEntity *, passedict, int, collisionGroup, ShouldHitFunc_t, pExtraShouldHitFunc)
+{
+	DETOUR_MEMBER_CALL(DETOUR_CTraceFilterSimple)(passedict, collisionGroup, pExtraShouldHitFunc);
 
-SH_DECL_HOOK2(CTraceFilterSkipTwoEntities, ShouldHitEntity, SH_NOATTRIB, 0, bool, IHandleEntity *, int);
+	// If we're in FindUseEntity right now then switch out the VTable
+	if(gv_InFindUseEntity)
+		*(uintptr_t *)this = g_CTraceFilterNoNPCsOrPlayer;
+}
 
+/* Make bullets ignore teammates */
 volatile bool gv_InFireBullets = false;
 volatile int gv_FireBulletPlayerTeam = 0;
+SH_DECL_HOOK2(CTraceFilterSkipTwoEntities, ShouldHitEntity, SH_NOATTRIB, 0, bool, IHandleEntity *, int);
+SH_DECL_HOOK2(CTraceFilterSimple, ShouldHitEntity, SH_NOATTRIB, 0, bool, IHandleEntity *, int);
 bool ShouldHitEntity(IHandleEntity *pHandleEntity, int contentsMask)
 {
 	if(!gv_InFireBullets)
@@ -260,23 +320,45 @@ DETOUR_DECL_STATIC7(DETOUR_FireBullets, void, int, iPlayerIndex, const Vector *,
 	gv_InFireBullets = false;
 }
 
-DETOUR_DECL_MEMBER3(DETOUR_CTraceFilterSimple, void, const IHandleEntity *, passedict, int, collisionGroup, ShouldHitFunc_t, pExtraShouldHitFunc)
+DETOUR_DECL_MEMBER1(DETOUR_SwingOrStab, bool, bool, bStab)
 {
-	DETOUR_MEMBER_CALL(DETOUR_CTraceFilterSimple)(passedict, collisionGroup, pExtraShouldHitFunc);
+	static int offset = 0;
+	if(!offset)
+	{
+		IServerUnknown *pUnk = (IServerUnknown *)this;
+		IServerNetworkable *pNet = pUnk->GetNetworkable();
 
-	// If we're in FindUseEntity right now then switch out the VTable
-	if(gv_InFindUseEntity)
-		*(uintptr_t *)this = g_CTraceFilterNoNPCsOrPlayer;
-}
+		if (!UTIL_ContainsDataTable(pNet->GetServerClass()->m_pTable, "DT_BaseCombatWeapon"))
+			return DETOUR_MEMBER_CALL(DETOUR_SwingOrStab)(bStab);
 
-DETOUR_DECL_MEMBER0(DETOUR_MultiWaitOver, void)
-{
-	CBaseEntity *pEntity = (CBaseEntity *)this;
-	edict_t *pEdict = gamehelpers->EdictOfIndex(gamehelpers->EntityToBCompatRef(pEntity));
-	if(pEdict)
-		engine->TriggerMoved(pEdict, true);
+		sm_sendprop_info_t spi;
+		if (!gamehelpers->FindSendPropInfo("CBaseCombatWeapon", "m_hOwnerEntity", &spi))
+			return DETOUR_MEMBER_CALL(DETOUR_SwingOrStab)(bStab);
 
-	DETOUR_MEMBER_CALL(DETOUR_MultiWaitOver)();
+		offset = spi.actual_offset;
+	}
+
+	CBaseHandle &hndl = *(CBaseHandle *)((uint8_t *)this + offset);
+
+	edict_t *pEdict = gamehelpers->GetHandleEntity(hndl);
+	if(!pEdict)
+		return DETOUR_MEMBER_CALL(DETOUR_SwingOrStab)(bStab);
+
+	IGamePlayer *pPlayer = playerhelpers->GetGamePlayer(pEdict);
+	if(!pPlayer)
+		return DETOUR_MEMBER_CALL(DETOUR_SwingOrStab)(bStab);
+
+	IPlayerInfo *pInfo = pPlayer->GetPlayerInfo();
+	if(!pInfo)
+		return DETOUR_MEMBER_CALL(DETOUR_SwingOrStab)(bStab);
+
+	gv_FireBulletPlayerTeam = pInfo->GetTeamIndex();
+
+	gv_InFireBullets = true;
+	bool bRet = DETOUR_MEMBER_CALL(DETOUR_SwingOrStab)(bStab);
+	gv_InFireBullets = false;
+
+	return bRet;
 }
 
 DETOUR_DECL_STATIC1(DETOUR_RunThinkFunctions, void, bool, simulating)
@@ -290,8 +372,86 @@ DETOUR_DECL_STATIC1(DETOUR_RunThinkFunctions, void, bool, simulating)
 	g_pOnRunThinkFunctionsPost->Execute();
 }
 
+/*
+void (*g_pPhysics_SimulateEntity)(CBaseEntity *pEntity) = NULL;
+void MyPhysics_SimulateEntity(CBaseEntity *pEntity)
+{
+	static CBaseEntity *s_apPlayerEntities[SM_MAXPLAYERS];
+	static int s_Players = 0;
+
+	edict_t *pEdict = gamehelpers->EdictOfIndex(gamehelpers->EntityToBCompatRef(pEntity));
+	if(!pEdict)
+		return pPhysics_SimulateEntity(pEntity);
+
+	int Entity = gamehelpers->IndexOfEdict(pEdict);
+	printf("MyPhysics_SimulateEntity(%d)\n", Entity);
+
+	if(Entity <= 0 || Entity > SM_MAXPLAYERS)
+		return pPhysics_SimulateEntity(pEntity);
+
+	//printf("MyPhysics_SimulateEntity(%d)\n", Entity);
+
+	return pPhysics_SimulateEntity(pEntity);
+}
+*/
+
+void (*g_pPhysics_SimulateEntity)(CBaseEntity *pEntity) = NULL;
+void Physics_SimulateEntity_CustomLoop(CBaseEntity **ppList, int Count, float Startime)
+{
+	CBaseEntity *apPlayers[SM_MAXPLAYERS];
+	int iPlayers = 0;
+
+	// Remove players from list and put into apPlayers
+	for(int i = 0; i < Count; i++)
+	{
+		CBaseEntity *pEntity = ppList[i];
+		if(!pEntity)
+			continue;
+
+		edict_t *pEdict = gamehelpers->EdictOfIndex(gamehelpers->EntityToBCompatRef(pEntity));
+		if(!pEdict)
+			continue;
+
+		int Entity = gamehelpers->IndexOfEdict(pEdict);
+		if(Entity >= 1 && Entity <= SM_MAXPLAYERS)
+		{
+			apPlayers[iPlayers++] = pEntity;
+			ppList[i] = NULL;
+		}
+	}
+
+	// Shuffle players array
+	for(int i = iPlayers - 1; i > 0; i--)
+	{
+		int j = rand() % (i + 1);
+		CBaseEntity *pTmp = apPlayers[j];
+		apPlayers[j] = apPlayers[i];
+		apPlayers[i] = pTmp;
+	}
+
+	// Simulate players first
+	for(int i = 0; i < iPlayers; i++)
+	{
+		gpGlobals->curtime = Startime;
+		g_pPhysics_SimulateEntity(apPlayers[i]);
+	}
+
+	// Now simulate the rest
+	for(int i = 0; i < Count; i++)
+	{
+		CBaseEntity *pEntity = ppList[i];
+		if(!pEntity)
+			continue;
+
+		gpGlobals->curtime = Startime;
+		g_pPhysics_SimulateEntity(pEntity);
+	}
+}
+
 bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 {
+	srand((unsigned int)time(NULL));
+
 	char conf_error[255] = "";
 	if(!gameconfs->LoadGameConfigFile("CSSFixes", &g_pGameConf, conf_error, sizeof(conf_error)))
 	{
@@ -335,14 +495,6 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		return false;
 	}
 
-	g_pDetour_MultiWaitOver = DETOUR_CREATE_MEMBER(DETOUR_MultiWaitOver, "CTriggerMultiple_MultiWaitOver");
-	if(g_pDetour_MultiWaitOver == NULL)
-	{
-		snprintf(error, maxlength, "Could not create detour for CTriggerMultiple_MultiWaitOver");
-		SDK_OnUnload();
-		return false;
-	}
-
 	g_pDetour_RunThinkFunctions = DETOUR_CREATE_STATIC(DETOUR_RunThinkFunctions, "Physics_RunThinkFunctions");
 	if(g_pDetour_RunThinkFunctions == NULL)
 	{
@@ -367,14 +519,22 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		return false;
 	}
 
+	g_pDetour_SwingOrStab = DETOUR_CREATE_MEMBER(DETOUR_SwingOrStab, "CKnife_SwingOrStab");
+	if(g_pDetour_SwingOrStab == NULL)
+	{
+		snprintf(error, maxlength, "Could not create detour for CKnife_SwingOrStab");
+		SDK_OnUnload();
+		return false;
+	}
+
 	g_pDetour_InputTestActivator->EnableDetour();
 	g_pDetour_PostConstructor->EnableDetour();
 	g_pDetour_FindUseEntity->EnableDetour();
 	g_pDetour_CTraceFilterSimple->EnableDetour();
-	g_pDetour_MultiWaitOver->EnableDetour();
 	g_pDetour_RunThinkFunctions->EnableDetour();
 	g_pDetour_KeyValue->EnableDetour();
 	g_pDetour_FireBullets->EnableDetour();
+	g_pDetour_SwingOrStab->EnableDetour();
 
 	// Find VTable for CTraceFilterSkipTwoEntities
 	uintptr_t pCTraceFilterSkipTwoEntities;
@@ -387,6 +547,17 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	// First function in VTable
 	g_CTraceFilterSkipTwoEntities = (CTraceFilterSkipTwoEntities *)(pCTraceFilterSkipTwoEntities + 8);
 
+	// Find VTable for CTraceFilterSimple
+	uintptr_t pCTraceFilterSimple;
+	if(!g_pGameConf->GetMemSig("CTraceFilterSimple", (void **)(&pCTraceFilterSimple)) || !pCTraceFilterSimple)
+	{
+		snprintf(error, maxlength, "Failed to find CTraceFilterSimple.\n");
+		SDK_OnUnload();
+		return false;
+	}
+	// First function in VTable
+	g_CTraceFilterSimple = (CTraceFilterSimple *)(pCTraceFilterSimple + 8);
+
 	// Find VTable for CTraceFilterNoNPCsOrPlayer
 	uintptr_t pCTraceFilterNoNPCsOrPlayer;
 	if(!g_pGameConf->GetMemSig("CTraceFilterNoNPCsOrPlayer", (void **)(&pCTraceFilterNoNPCsOrPlayer)) || !pCTraceFilterNoNPCsOrPlayer)
@@ -398,7 +569,15 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	// First function in VTable
 	g_CTraceFilterNoNPCsOrPlayer = pCTraceFilterNoNPCsOrPlayer + 8;
 
-	g_SH_ShouldHitEntity = SH_ADD_DVPHOOK(CTraceFilterSkipTwoEntities, ShouldHitEntity, g_CTraceFilterSkipTwoEntities, SH_STATIC(ShouldHitEntity), true);
+	g_SH_SkipTwoEntitiesShouldHitEntity = SH_ADD_DVPHOOK(CTraceFilterSkipTwoEntities, ShouldHitEntity, g_CTraceFilterSkipTwoEntities, SH_STATIC(ShouldHitEntity), true);
+	g_SH_SimpleShouldHitEntity = SH_ADD_DVPHOOK(CTraceFilterSimple, ShouldHitEntity, g_CTraceFilterSimple, SH_STATIC(ShouldHitEntity), true);
+
+	if(!g_pGameConf->GetMemSig("Physics_SimulateEntity", (void **)(&g_pPhysics_SimulateEntity)) || !g_pPhysics_SimulateEntity)
+	{
+		snprintf(error, maxlength, "Failed to find Physics_SimulateEntity.\n");
+		SDK_OnUnload();
+		return false;
+	}
 
 	void *pServerSo = dlopen("cstrike/bin/server_srv.so", RTLD_NOW);
 	if(!pServerSo)
@@ -407,6 +586,73 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		SDK_OnUnload();
 		return false;
 	}
+
+/*
+	// 4: Special
+	uintptr_t pPhysics_RunThinkFunctions;
+	if(!g_pGameConf->GetMemSig("Physics_RunThinkFunctions", (void **)(&pPhysics_RunThinkFunctions)) || !pPhysics_RunThinkFunctions)
+	{
+		snprintf(error, maxlength, "Failed to find Physics_RunThinkFunctions.\n");
+		SDK_OnUnload();
+		return false;
+	}
+
+	if(!g_pGameConf->GetMemSig("Physics_SimulateEntity", (void **)(&pPhysics_SimulateEntity)) || !pPhysics_SimulateEntity)
+	{
+		snprintf(error, maxlength, "Failed to find Physics_SimulateEntity.\n");
+		SDK_OnUnload();
+		return false;
+	}
+
+	// Don't care about the first one
+	uintptr_t pFuncCall = FindFunctionCall(pPhysics_RunThinkFunctions, (uintptr_t)pPhysics_SimulateEntity, 1024);
+	pFuncCall = FindFunctionCall(pFuncCall + 5, (uintptr_t)pPhysics_SimulateEntity, 1024);
+
+	static unsigned char aPatchSignature[] = {0xE8, 0x00, 0x00, 0x00, 0x00};
+	*(uintptr_t *)&aPatchSignature[1] = *(uintptr_t *)(pFuncCall + 1);
+	gs_Patches[4].pPatchSignature = aPatchSignature;
+
+	static unsigned char aPatch[] = {0xE8, 0x00, 0x00, 0x00, 0x00};
+	*(uintptr_t *)&aPatch[1] = (uintptr_t)MyPhysics_SimulateEntity - pFuncCall - 5;
+	gs_Patches[4].pPatch = aPatch;
+*/
+
+	/* 4: Special */
+	uintptr_t pAddress = (uintptr_t)memutils->ResolveSymbol(pServerSo, gs_Patches[4].pSignature);
+	if(!pAddress)
+	{
+		snprintf(error, maxlength, "Could not find symbol: %s", gs_Patches[4].pSignature);
+		dlclose(pServerSo);
+		SDK_OnUnload();
+		return false;
+	}
+
+	uintptr_t pPatchAddress = FindPattern(pAddress, gs_Patches[4].pPatchSignature, gs_Patches[4].pPatchPattern, 1024);
+	if(!pPatchAddress)
+	{
+		snprintf(error, maxlength, "Could not find patch signature for symbol: %s", gs_Patches[4].pSignature);
+		dlclose(pServerSo);
+		SDK_OnUnload();
+		return false;
+	}
+
+	// mov [esp+8], edi ; startime
+	// mov [esp+4], eax ; count
+	// mov [esp], esi ; **list
+	// call NULL ; <- our func here
+	// mov eax, ds:gpGlobals ; restore
+	// jmp +11 ; jump over useless instructions
+	static unsigned char aPatch[] = "\x89\x7C\x24\x08\x89\x44\x24\x04\x89\x34\x24\xE8\x00\x00\x00\x00\xA1\x00\x00\x00\x00\xEB\x0B\x90\x90\x90";
+	gs_Patches[4].pPatch = aPatch;
+
+	// put our function address into the relative call instruction
+	// relative call: new PC = PC + imm1
+	// call is at + 11 after pPatchAddress
+	// PC will be past our call instruction so + 5
+	*(uintptr_t *)&aPatch[12] = (uintptr_t)Physics_SimulateEntity_CustomLoop - (pPatchAddress + 11 + 5);
+
+	// restore "mov eax, ds:gpGlobals" from original to our patch after the call
+	*(uintptr_t *)&aPatch[17] = *(uintptr_t *)(pPatchAddress + 8);
 
 	// Apply all patches
 	for(size_t i = 0; i < sizeof(gs_Patches) / sizeof(*gs_Patches); i++)
@@ -477,12 +723,6 @@ void CSSFixes::SDK_OnUnload()
 		g_pDetour_CTraceFilterSimple = NULL;
 	}
 
-	if(g_pDetour_MultiWaitOver != NULL)
-	{
-		g_pDetour_MultiWaitOver->Destroy();
-		g_pDetour_MultiWaitOver = NULL;
-	}
-
 	if(g_pDetour_RunThinkFunctions != NULL)
 	{
 		g_pDetour_RunThinkFunctions->Destroy();
@@ -501,6 +741,12 @@ void CSSFixes::SDK_OnUnload()
 		g_pDetour_FireBullets = NULL;
 	}
 
+	if(g_pDetour_SwingOrStab != NULL)
+	{
+		g_pDetour_SwingOrStab->Destroy();
+		g_pDetour_SwingOrStab = NULL;
+	}
+
 	if(g_pOnRunThinkFunctions != NULL)
 	{
 		forwards->ReleaseForward(g_pOnRunThinkFunctions);
@@ -513,8 +759,11 @@ void CSSFixes::SDK_OnUnload()
 		g_pOnRunThinkFunctionsPost = NULL;
 	}
 
-	if(g_SH_ShouldHitEntity)
-		SH_REMOVE_HOOK_ID(g_SH_ShouldHitEntity);
+	if(g_SH_SkipTwoEntitiesShouldHitEntity)
+		SH_REMOVE_HOOK_ID(g_SH_SkipTwoEntitiesShouldHitEntity);
+
+	if(g_SH_SimpleShouldHitEntity)
+		SH_REMOVE_HOOK_ID(g_SH_SimpleShouldHitEntity);
 
 	gameconfs->CloseGameConfigFile(g_pGameConf);
 
@@ -542,6 +791,7 @@ void CSSFixes::SDK_OnUnload()
 bool CSSFixes::SDK_OnMetamodLoad(ISmmAPI *ismm, char *error, size_t maxlen, bool late)
 {
 	GET_V_IFACE_CURRENT(GetEngineFactory, engine, IVEngineServer, INTERFACEVERSION_VENGINESERVER);
+	gpGlobals = ismm->GetCGlobals();
 	return true;
 }
 
@@ -560,6 +810,29 @@ uintptr_t FindPattern(uintptr_t BaseAddr, const unsigned char *pData, const char
 			Matches++;
 			if(Matches == PatternLen)
 				return (uintptr_t)(pMemory + i);
+		}
+	}
+
+	return 0x00;
+}
+
+uintptr_t FindFunctionCall(uintptr_t BaseAddr, uintptr_t Function, size_t MaxSize)
+{
+	unsigned char *pMemory;
+	pMemory = reinterpret_cast<unsigned char *>(BaseAddr);
+
+	for(uintptr_t i = 0; i < MaxSize; i++)
+	{
+		if(pMemory[i] == 0xE8) // CALL
+		{
+			uintptr_t CallAddr = *(uintptr_t *)(pMemory + i + 1);
+
+			CallAddr += (uintptr_t)(pMemory + i + 5);
+
+			if(CallAddr == Function)
+				return (uintptr_t)(pMemory + i);
+
+			i += 4;
 		}
 	}
 
