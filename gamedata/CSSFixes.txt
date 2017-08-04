@@ -81,6 +81,12 @@
 				"library"	"server"
 				"linux"		"@_ZN6CKnife11SwingOrStabEb"
 			}
+
+			"CGameServer_BroadcastSound"
+			{
+				"library"	"engine"
+				"linux"		"@_ZN11CGameServer14BroadcastSoundER11SoundInfo_tR16IRecipientFilter"
+			}
 		}
 	}
 }

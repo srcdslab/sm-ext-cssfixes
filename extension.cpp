@@ -173,6 +173,7 @@ IGameConfig *g_pGameConf = NULL;
 
 IForward *g_pOnRunThinkFunctions = NULL;
 IForward *g_pOnRunThinkFunctionsPost = NULL;
+IForward *g_pOnBroadcastSound = NULL;
 
 CDetour *g_pDetour_InputTestActivator = NULL;
 CDetour *g_pDetour_PostConstructor = NULL;
@@ -182,6 +183,7 @@ CDetour *g_pDetour_RunThinkFunctions = NULL;
 CDetour *g_pDetour_KeyValue = NULL;
 CDetour *g_pDetour_FireBullets = NULL;
 CDetour *g_pDetour_SwingOrStab = NULL;
+CDetour *g_pDetour_BroadcastSound = NULL;
 int g_SH_SkipTwoEntitiesShouldHitEntity = 0;
 int g_SH_SimpleShouldHitEntity = 0;
 
@@ -372,29 +374,6 @@ DETOUR_DECL_STATIC1(DETOUR_RunThinkFunctions, void, bool, simulating)
 	g_pOnRunThinkFunctionsPost->Execute();
 }
 
-/*
-void (*g_pPhysics_SimulateEntity)(CBaseEntity *pEntity) = NULL;
-void MyPhysics_SimulateEntity(CBaseEntity *pEntity)
-{
-	static CBaseEntity *s_apPlayerEntities[SM_MAXPLAYERS];
-	static int s_Players = 0;
-
-	edict_t *pEdict = gamehelpers->EdictOfIndex(gamehelpers->EntityToBCompatRef(pEntity));
-	if(!pEdict)
-		return pPhysics_SimulateEntity(pEntity);
-
-	int Entity = gamehelpers->IndexOfEdict(pEdict);
-	printf("MyPhysics_SimulateEntity(%d)\n", Entity);
-
-	if(Entity <= 0 || Entity > SM_MAXPLAYERS)
-		return pPhysics_SimulateEntity(pEntity);
-
-	//printf("MyPhysics_SimulateEntity(%d)\n", Entity);
-
-	return pPhysics_SimulateEntity(pEntity);
-}
-*/
-
 void (*g_pPhysics_SimulateEntity)(CBaseEntity *pEntity) = NULL;
 void Physics_SimulateEntity_CustomLoop(CBaseEntity **ppList, int Count, float Startime)
 {
@@ -446,6 +425,60 @@ void Physics_SimulateEntity_CustomLoop(CBaseEntity **ppList, int Count, float St
 		gpGlobals->curtime = Startime;
 		g_pPhysics_SimulateEntity(pEntity);
 	}
+}
+
+SH_DECL_HOOK8_void(IVEngineServer, EmitAmbientSound, SH_NOATTRIB, 0, int, const Vector &, const char *, float, soundlevel_t, int, int, float);
+
+#include <irecipientfilter.h>
+#include <soundinfo.h>
+class CEngineRecipientFilter : public IRecipientFilter
+{
+public:
+	bool				m_bInit;
+	bool				m_bReliable;
+	CUtlVector< int >	m_Recipients;
+};
+
+int g_pAmbientSoundEntity = 0;
+const char *g_pAmbientSoundSample = NULL;
+void HOOK_EmitAmbientSound(int entindex, const Vector &pos, const char *samp, float vol,
+									soundlevel_t soundlevel, int fFlags, int pitch, float delay)
+{
+	g_pAmbientSoundEntity = entindex;
+	g_pAmbientSoundSample = samp;
+}
+
+DETOUR_DECL_MEMBER2(DETOUR_BroadcastSound, void, SoundInfo_t *, sound, CEngineRecipientFilter *, filter)
+{
+	if(g_pAmbientSoundSample)
+	{
+		CUtlVector< int > *pRecipients = &filter->m_Recipients;
+
+		cell_t clients[SM_MAXPLAYERS] = {};
+		cell_t numClients = pRecipients->Count();
+
+		for(int i = 0; i < numClients; i++)
+			clients[i] = (*pRecipients)[i];
+
+		g_pOnBroadcastSound->PushCell(sound->nEntityIndex);
+		g_pOnBroadcastSound->PushString(g_pAmbientSoundSample);
+		g_pOnBroadcastSound->PushArray(clients, SM_MAXPLAYERS);
+		g_pOnBroadcastSound->PushCellByRef(&numClients);
+
+		cell_t result = 0;
+		g_pOnBroadcastSound->Execute(&result);
+
+		if(result > 0 && numClients < SM_MAXPLAYERS)
+		{
+			pRecipients->RemoveAll();
+			for(int i = 0; i < numClients; i++)
+				pRecipients->AddToTail(clients[i]);
+		}
+
+		g_pAmbientSoundSample = NULL;
+	}
+
+	DETOUR_MEMBER_CALL(DETOUR_BroadcastSound)(sound, filter);
 }
 
 bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
@@ -527,6 +560,14 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		return false;
 	}
 
+	g_pDetour_BroadcastSound = DETOUR_CREATE_MEMBER(DETOUR_BroadcastSound, "CGameServer_BroadcastSound");
+	if(g_pDetour_BroadcastSound == NULL)
+	{
+		snprintf(error, maxlength, "Could not create detour for CGameServer_BroadcastSound");
+		SDK_OnUnload();
+		return false;
+	}
+
 	g_pDetour_InputTestActivator->EnableDetour();
 	g_pDetour_PostConstructor->EnableDetour();
 	g_pDetour_FindUseEntity->EnableDetour();
@@ -535,6 +576,9 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	g_pDetour_KeyValue->EnableDetour();
 	g_pDetour_FireBullets->EnableDetour();
 	g_pDetour_SwingOrStab->EnableDetour();
+	g_pDetour_BroadcastSound->EnableDetour();
+
+	SH_ADD_HOOK(IVEngineServer, EmitAmbientSound, engine, SH_STATIC(HOOK_EmitAmbientSound), false);
 
 	// Find VTable for CTraceFilterSkipTwoEntities
 	uintptr_t pCTraceFilterSkipTwoEntities;
@@ -586,36 +630,6 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		SDK_OnUnload();
 		return false;
 	}
-
-/*
-	// 4: Special
-	uintptr_t pPhysics_RunThinkFunctions;
-	if(!g_pGameConf->GetMemSig("Physics_RunThinkFunctions", (void **)(&pPhysics_RunThinkFunctions)) || !pPhysics_RunThinkFunctions)
-	{
-		snprintf(error, maxlength, "Failed to find Physics_RunThinkFunctions.\n");
-		SDK_OnUnload();
-		return false;
-	}
-
-	if(!g_pGameConf->GetMemSig("Physics_SimulateEntity", (void **)(&pPhysics_SimulateEntity)) || !pPhysics_SimulateEntity)
-	{
-		snprintf(error, maxlength, "Failed to find Physics_SimulateEntity.\n");
-		SDK_OnUnload();
-		return false;
-	}
-
-	// Don't care about the first one
-	uintptr_t pFuncCall = FindFunctionCall(pPhysics_RunThinkFunctions, (uintptr_t)pPhysics_SimulateEntity, 1024);
-	pFuncCall = FindFunctionCall(pFuncCall + 5, (uintptr_t)pPhysics_SimulateEntity, 1024);
-
-	static unsigned char aPatchSignature[] = {0xE8, 0x00, 0x00, 0x00, 0x00};
-	*(uintptr_t *)&aPatchSignature[1] = *(uintptr_t *)(pFuncCall + 1);
-	gs_Patches[4].pPatchSignature = aPatchSignature;
-
-	static unsigned char aPatch[] = {0xE8, 0x00, 0x00, 0x00, 0x00};
-	*(uintptr_t *)&aPatch[1] = (uintptr_t)MyPhysics_SimulateEntity - pFuncCall - 5;
-	gs_Patches[4].pPatch = aPatch;
-*/
 
 	/* 4: Special */
 	uintptr_t pAddress = (uintptr_t)memutils->ResolveSymbol(pServerSo, gs_Patches[4].pSignature);
@@ -693,6 +707,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 
 	g_pOnRunThinkFunctions = forwards->CreateForward("OnRunThinkFunctions", ET_Ignore, 1, NULL, Param_Cell);
 	g_pOnRunThinkFunctionsPost = forwards->CreateForward("OnRunThinkFunctionsPost", ET_Ignore, 1, NULL, Param_Cell);
+	g_pOnBroadcastSound = forwards->CreateForward("OnBroadcastSound", ET_Event, 4, NULL, Param_Cell, Param_String, Param_Array, Param_CellByRef);
 
 	return true;
 }
@@ -747,6 +762,12 @@ void CSSFixes::SDK_OnUnload()
 		g_pDetour_SwingOrStab = NULL;
 	}
 
+	if(g_pDetour_BroadcastSound != NULL)
+	{
+		g_pDetour_BroadcastSound->Destroy();
+		g_pDetour_BroadcastSound = NULL;
+	}
+
 	if(g_pOnRunThinkFunctions != NULL)
 	{
 		forwards->ReleaseForward(g_pOnRunThinkFunctions);
@@ -758,6 +779,14 @@ void CSSFixes::SDK_OnUnload()
 		forwards->ReleaseForward(g_pOnRunThinkFunctionsPost);
 		g_pOnRunThinkFunctionsPost = NULL;
 	}
+
+	if(g_pOnBroadcastSound != NULL)
+	{
+		forwards->ReleaseForward(g_pOnBroadcastSound);
+		g_pOnBroadcastSound = NULL;
+	}
+
+	SH_REMOVE_HOOK(IVEngineServer, EmitAmbientSound, engine, SH_STATIC(HOOK_EmitAmbientSound), false);
 
 	if(g_SH_SkipTwoEntitiesShouldHitEntity)
 		SH_REMOVE_HOOK_ID(g_SH_SkipTwoEntitiesShouldHitEntity);
