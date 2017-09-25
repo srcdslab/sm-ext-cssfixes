@@ -452,13 +452,11 @@ DETOUR_DECL_MEMBER2(DETOUR_BroadcastSound, void, SoundInfo_t *, sound, CEngineRe
 {
 	if(g_pAmbientSoundSample)
 	{
-		CUtlVector< int > *pRecipients = &filter->m_Recipients;
-
 		cell_t clients[SM_MAXPLAYERS] = {};
-		cell_t numClients = pRecipients->Count();
+		cell_t numClients = filter->GetRecipientCount();
 
 		for(int i = 0; i < numClients; i++)
-			clients[i] = (*pRecipients)[i];
+			clients[i] = filter->GetRecipientIndex(i);
 
 		g_pOnBroadcastSound->PushCell(sound->nEntityIndex);
 		g_pOnBroadcastSound->PushString(g_pAmbientSoundSample);
@@ -468,6 +466,7 @@ DETOUR_DECL_MEMBER2(DETOUR_BroadcastSound, void, SoundInfo_t *, sound, CEngineRe
 		cell_t result = 0;
 		g_pOnBroadcastSound->Execute(&result);
 
+		CUtlVector< int > *pRecipients = &filter->m_Recipients;
 		if(result > 0 && numClients < SM_MAXPLAYERS)
 		{
 			pRecipients->RemoveAll();
