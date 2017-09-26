@@ -272,10 +272,10 @@ SH_DECL_HOOK2(CTraceFilterSimple, ShouldHitEntity, SH_NOATTRIB, 0, bool, IHandle
 bool ShouldHitEntity(IHandleEntity *pHandleEntity, int contentsMask)
 {
 	if(!gv_InFireBullets)
-		return true;
+		RETURN_META_VALUE(MRES_IGNORED, true);
 
 	if(META_RESULT_ORIG_RET(bool) == false)
-		return false;
+		RETURN_META_VALUE(MRES_IGNORED, false);
 
 	IServerUnknown *pUnk = (IServerUnknown *)pHandleEntity;
 
@@ -302,23 +302,23 @@ bool ShouldHitEntity(IHandleEntity *pHandleEntity, int contentsMask)
 	RETURN_META_VALUE(MRES_IGNORED, true);
 }
 
-DETOUR_DECL_STATIC7(DETOUR_FireBullets, void, int, iPlayerIndex, const Vector *, vOrigin, const QAngle *, vAngles, int, iWeaponID, int, iMode, int, iSeed, float, flSpread)
+DETOUR_DECL_STATIC9(DETOUR_FireBullets, void, int, iPlayerIndex, const Vector *, vOrigin, const QAngle *, vAngles, int, iWeaponID, int, iMode, int, iSeed, float, flSpread, float, _f1, float, _f2)
 {
 	if(iPlayerIndex <= 0 || iPlayerIndex > playerhelpers->GetMaxClients())
-		return DETOUR_STATIC_CALL(DETOUR_FireBullets)(iPlayerIndex, vOrigin, vAngles, iWeaponID, iMode, iSeed, flSpread);
+		return DETOUR_STATIC_CALL(DETOUR_FireBullets)(iPlayerIndex, vOrigin, vAngles, iWeaponID, iMode, iSeed, flSpread, _f1, _f2);
 
 	IGamePlayer *pPlayer = playerhelpers->GetGamePlayer(iPlayerIndex);
 	if(!pPlayer)
-		return DETOUR_STATIC_CALL(DETOUR_FireBullets)(iPlayerIndex, vOrigin, vAngles, iWeaponID, iMode, iSeed, flSpread);
+		return DETOUR_STATIC_CALL(DETOUR_FireBullets)(iPlayerIndex, vOrigin, vAngles, iWeaponID, iMode, iSeed, flSpread, _f1, _f2);
 
 	IPlayerInfo *pInfo = pPlayer->GetPlayerInfo();
 	if(!pInfo)
-		return DETOUR_STATIC_CALL(DETOUR_FireBullets)(iPlayerIndex, vOrigin, vAngles, iWeaponID, iMode, iSeed, flSpread);
+		return DETOUR_STATIC_CALL(DETOUR_FireBullets)(iPlayerIndex, vOrigin, vAngles, iWeaponID, iMode, iSeed, flSpread, _f1, _f2);
 
 	gv_FireBulletPlayerTeam = pInfo->GetTeamIndex();
 
 	gv_InFireBullets = true;
-	DETOUR_STATIC_CALL(DETOUR_FireBullets)(iPlayerIndex, vOrigin, vAngles, iWeaponID, iMode, iSeed, flSpread);
+	DETOUR_STATIC_CALL(DETOUR_FireBullets)(iPlayerIndex, vOrigin, vAngles, iWeaponID, iMode, iSeed, flSpread, _f1, _f2);
 	gv_InFireBullets = false;
 }
 
