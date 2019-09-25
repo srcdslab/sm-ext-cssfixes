@@ -94,38 +94,39 @@ static struct SrcdsPatch
 	unsigned char *pOriginal;
 	uintptr_t pAddress;
 	uintptr_t pPatchAddress;
+	bool engine;
 } gs_Patches[] = {
-	// 0
+	// 0: game_ui should not apply FL_ONTRAIN flag, else client prediction turns off
 	{
 		"_ZN7CGameUI5ThinkEv",
 		(unsigned char *)"\xC7\x44\x24\x04\x10\x00\x00\x00\x89\x34\x24\xE8\x00\x00\x00\x00",
 		"xxxxxxxxxxxx????",
 		(unsigned char *)"\xC7\x44\x24\x04\x10\x00\x00\x00\x89\x34\x24\x90\x90\x90\x90\x90",
-		0, 0, 0
+		0, 0, 0, false
 	},
-	// 1
+	// 1: player_speedmod should not turn off flashlight
 	{
 		"_ZN17CMovementSpeedMod13InputSpeedModER11inputdata_t",
 		(unsigned char *)"\xFF\x90\x8C\x05\x00\x00\x85\xC0\x0F\x85\x75\x02\x00\x00",
 		"xxxxxxxxxxxxxx",
 		(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
-		0, 0, 0
+		0, 0, 0, false
 	},
-	// 2
+	// 2: only select CT spawnpoints
 	{
 		"_ZN9CCSPlayer19EntSelectSpawnPointEv",
 		(unsigned char *)"\x89\x1C\x24\xE8\x00\x00\x00\x00\x83\xF8\x03\x74\x4B",
 		"xxxx????xxxxx",
 		(unsigned char *)"\x89\x1C\x24\x90\x90\x90\x90\x90\x90\x90\x90\xEB\x4B",
-		0, 0, 0
+		0, 0, 0, false
 	},
-	// 3
+	// 3: don't check if we have T spawns
 	{
 		"_ZN12CCSGameRules18NeededPlayersCheckERb",
 		(unsigned char *)"\x74\x0E\x8B\x83\x80\x02\x00\x00\x85\xC0\x0F\x85\x9E\x00\x00\x00\xC7\x04\x24\xAC\xF7\x87\x00\xE8\xC2\x82\x91\x00",
 		"xxxxxxxxxxxxxxxx????????????",
 		(unsigned char *)"\x0F\x85\xA8\x00\x00\x00\x8B\x83\x80\x02\x00\x00\x85\xC0\x0F\x85\x9A\x00\x00\x00\x90\x90\x90\x90\x90\x90\x90\x90",
-		0, 0, 0
+		0, 0, 0, false
 	},
 	// 4: Special
 	{
@@ -133,8 +134,8 @@ static struct SrcdsPatch
 		(unsigned char *)"\x8B\x04\x9E\x85\xC0\x74\x13\xA1\x00\x00\x00\x00\x89\x78\x0C\x8B\x04\x9E\x89\x04\x24\xE8\x00\x00\x00\x00",
 		"xxxxxxxx????xxxxxxxxxx????",
 		NULL,
-		0, 0, 0
-	}
+		0, 0, 0, false
+	},
 };
 
 class CBaseEntity;
@@ -173,7 +174,6 @@ IGameConfig *g_pGameConf = NULL;
 
 IForward *g_pOnRunThinkFunctions = NULL;
 IForward *g_pOnRunThinkFunctionsPost = NULL;
-IForward *g_pOnBroadcastSound = NULL;
 
 CDetour *g_pDetour_InputTestActivator = NULL;
 CDetour *g_pDetour_PostConstructor = NULL;
@@ -183,7 +183,6 @@ CDetour *g_pDetour_RunThinkFunctions = NULL;
 CDetour *g_pDetour_KeyValue = NULL;
 CDetour *g_pDetour_FireBullets = NULL;
 CDetour *g_pDetour_SwingOrStab = NULL;
-CDetour *g_pDetour_BroadcastSound = NULL;
 int g_SH_SkipTwoEntitiesShouldHitEntity = 0;
 int g_SH_SimpleShouldHitEntity = 0;
 
@@ -427,59 +426,6 @@ void Physics_SimulateEntity_CustomLoop(CBaseEntity **ppList, int Count, float St
 	}
 }
 
-SH_DECL_HOOK8_void(IVEngineServer, EmitAmbientSound, SH_NOATTRIB, 0, int, const Vector &, const char *, float, soundlevel_t, int, int, float);
-
-#include <irecipientfilter.h>
-#include <soundinfo.h>
-class CEngineRecipientFilter : public IRecipientFilter
-{
-public:
-	bool				m_bInit;
-	bool				m_bReliable;
-	CUtlVector< int >	m_Recipients;
-};
-
-int g_pAmbientSoundEntity = 0;
-const char *g_pAmbientSoundSample = NULL;
-void HOOK_EmitAmbientSound(int entindex, const Vector &pos, const char *samp, float vol,
-									soundlevel_t soundlevel, int fFlags, int pitch, float delay)
-{
-	g_pAmbientSoundEntity = entindex;
-	g_pAmbientSoundSample = samp;
-}
-
-DETOUR_DECL_MEMBER2(DETOUR_BroadcastSound, void, SoundInfo_t *, sound, CEngineRecipientFilter *, filter)
-{
-	if(g_pAmbientSoundSample)
-	{
-		cell_t clients[SM_MAXPLAYERS] = {};
-		cell_t numClients = filter->GetRecipientCount();
-
-		for(int i = 0; i < numClients; i++)
-			clients[i] = filter->GetRecipientIndex(i);
-
-		g_pOnBroadcastSound->PushCell(sound->nEntityIndex);
-		g_pOnBroadcastSound->PushString(g_pAmbientSoundSample);
-		g_pOnBroadcastSound->PushArray(clients, SM_MAXPLAYERS);
-		g_pOnBroadcastSound->PushCellByRef(&numClients);
-
-		cell_t result = 0;
-		g_pOnBroadcastSound->Execute(&result);
-
-		CUtlVector< int > *pRecipients = &filter->m_Recipients;
-		if(result > 0 && numClients < SM_MAXPLAYERS)
-		{
-			pRecipients->RemoveAll();
-			for(int i = 0; i < numClients; i++)
-				pRecipients->AddToTail(clients[i]);
-		}
-
-		g_pAmbientSoundSample = NULL;
-	}
-
-	DETOUR_MEMBER_CALL(DETOUR_BroadcastSound)(sound, filter);
-}
-
 bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 {
 	srand((unsigned int)time(NULL));
@@ -559,14 +505,6 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		return false;
 	}
 
-	g_pDetour_BroadcastSound = DETOUR_CREATE_MEMBER(DETOUR_BroadcastSound, "CGameServer_BroadcastSound");
-	if(g_pDetour_BroadcastSound == NULL)
-	{
-		snprintf(error, maxlength, "Could not create detour for CGameServer_BroadcastSound");
-		SDK_OnUnload();
-		return false;
-	}
-
 	g_pDetour_InputTestActivator->EnableDetour();
 	g_pDetour_PostConstructor->EnableDetour();
 	g_pDetour_FindUseEntity->EnableDetour();
@@ -575,9 +513,6 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	g_pDetour_KeyValue->EnableDetour();
 	g_pDetour_FireBullets->EnableDetour();
 	g_pDetour_SwingOrStab->EnableDetour();
-	g_pDetour_BroadcastSound->EnableDetour();
-
-	SH_ADD_HOOK(IVEngineServer, EmitAmbientSound, engine, SH_STATIC(HOOK_EmitAmbientSound), false);
 
 	// Find VTable for CTraceFilterSkipTwoEntities
 	uintptr_t pCTraceFilterSkipTwoEntities;
@@ -630,12 +565,21 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		return false;
 	}
 
+	void *pEngineSo = dlopen("bin/engine_srv.so", RTLD_NOW);
+	if(!pEngineSo)
+	{
+		snprintf(error, maxlength, "Could not dlopen engine_srv.so");
+		SDK_OnUnload();
+		return false;
+	}
+
 	/* 4: Special */
 	uintptr_t pAddress = (uintptr_t)memutils->ResolveSymbol(pServerSo, gs_Patches[4].pSignature);
 	if(!pAddress)
 	{
 		snprintf(error, maxlength, "Could not find symbol: %s", gs_Patches[4].pSignature);
 		dlclose(pServerSo);
+		dlclose(pEngineSo);
 		SDK_OnUnload();
 		return false;
 	}
@@ -645,6 +589,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	{
 		snprintf(error, maxlength, "Could not find patch signature for symbol: %s", gs_Patches[4].pSignature);
 		dlclose(pServerSo);
+		dlclose(pEngineSo);
 		SDK_OnUnload();
 		return false;
 	}
@@ -673,11 +618,13 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		struct SrcdsPatch *pPatch = &gs_Patches[i];
 		int PatchLen = strlen(pPatch->pPatchPattern);
 
-		pPatch->pAddress = (uintptr_t)memutils->ResolveSymbol(pServerSo, pPatch->pSignature);
+		void *pBinary = pPatch->engine ? pEngineSo : pServerSo;
+		pPatch->pAddress = (uintptr_t)memutils->ResolveSymbol(pBinary, pPatch->pSignature);
 		if(!pPatch->pAddress)
 		{
 			snprintf(error, maxlength, "Could not find symbol: %s", pPatch->pSignature);
 			dlclose(pServerSo);
+			dlclose(pEngineSo);
 			SDK_OnUnload();
 			return false;
 		}
@@ -687,6 +634,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		{
 			snprintf(error, maxlength, "Could not find patch signature for symbol: %s", pPatch->pSignature);
 			dlclose(pServerSo);
+			dlclose(pEngineSo);
 			SDK_OnUnload();
 			return false;
 		}
@@ -703,10 +651,10 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	}
 
 	dlclose(pServerSo);
+	dlclose(pEngineSo);
 
 	g_pOnRunThinkFunctions = forwards->CreateForward("OnRunThinkFunctions", ET_Ignore, 1, NULL, Param_Cell);
 	g_pOnRunThinkFunctionsPost = forwards->CreateForward("OnRunThinkFunctionsPost", ET_Ignore, 1, NULL, Param_Cell);
-	g_pOnBroadcastSound = forwards->CreateForward("OnBroadcastSound", ET_Event, 4, NULL, Param_Cell, Param_String, Param_Array, Param_CellByRef);
 
 	return true;
 }
@@ -761,12 +709,6 @@ void CSSFixes::SDK_OnUnload()
 		g_pDetour_SwingOrStab = NULL;
 	}
 
-	if(g_pDetour_BroadcastSound != NULL)
-	{
-		g_pDetour_BroadcastSound->Destroy();
-		g_pDetour_BroadcastSound = NULL;
-	}
-
 	if(g_pOnRunThinkFunctions != NULL)
 	{
 		forwards->ReleaseForward(g_pOnRunThinkFunctions);
@@ -778,14 +720,6 @@ void CSSFixes::SDK_OnUnload()
 		forwards->ReleaseForward(g_pOnRunThinkFunctionsPost);
 		g_pOnRunThinkFunctionsPost = NULL;
 	}
-
-	if(g_pOnBroadcastSound != NULL)
-	{
-		forwards->ReleaseForward(g_pOnBroadcastSound);
-		g_pOnBroadcastSound = NULL;
-	}
-
-	SH_REMOVE_HOOK(IVEngineServer, EmitAmbientSound, engine, SH_STATIC(HOOK_EmitAmbientSound), false);
 
 	if(g_SH_SkipTwoEntitiesShouldHitEntity)
 		SH_REMOVE_HOOK_ID(g_SH_SkipTwoEntitiesShouldHitEntity);

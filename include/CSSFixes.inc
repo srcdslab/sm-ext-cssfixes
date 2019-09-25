@@ -5,7 +5,6 @@
 
 forward void OnRunThinkFunctions(bool simulating);
 forward void OnRunThinkFunctionsPost(bool simulating);
-forward Action OnBroadcastSound(int entity, char sample[PLATFORM_MAX_PATH], int clients[MAXPLAYERS], int &numClients);
 
 public Extension __ext_CSSFixes =
 {
