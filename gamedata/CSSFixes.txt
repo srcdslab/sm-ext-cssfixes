@@ -82,10 +82,10 @@
 				"linux"		"@_ZN6CKnife11SwingOrStabEb"
 			}
 
-			"CGameServer_BroadcastSound"
+			"CTriggerMoved"
 			{
 				"library"	"engine"
-				"linux"		"@_ZN11CGameServer14BroadcastSoundER11SoundInfo_tR16IRecipientFilter"
+				"linux"		"@_ZTV13CTriggerMoved"
 			}
 		}
 	}

@@ -36,6 +36,7 @@
 #include <sh_memory.h>
 #include <IEngineTrace.h>
 #include <server_class.h>
+#include <ispatialpartition.h>
 
 bool UTIL_ContainsDataTable(SendTable *pTable, const char *name)
 {
@@ -82,6 +83,12 @@ class CTraceFilterSkipTwoEntities : public CTraceFilterSimple
 public:
 	virtual bool ShouldHitEntity( IHandleEntity *pHandleEntity, int contentsMask ) = 0;
 	virtual void SetPassEntity2( const IHandleEntity *pPassEntity2 ) = 0;
+};
+
+class CTriggerMoved : public IPartitionEnumerator
+{
+public:
+	virtual IterationRetval_t EnumElement( IHandleEntity *pHandleEntity ) = 0;
 };
 
 static struct SrcdsPatch
@@ -173,6 +180,8 @@ CGlobalVars *gpGlobals = NULL;
 IGameConfig *g_pGameConf = NULL;
 
 IForward *g_pOnRunThinkFunctions = NULL;
+IForward *g_pOnPrePlayerThinkFunctions = NULL;
+IForward *g_pOnPostPlayerThinkFunctions = NULL;
 IForward *g_pOnRunThinkFunctionsPost = NULL;
 
 CDetour *g_pDetour_InputTestActivator = NULL;
@@ -185,10 +194,12 @@ CDetour *g_pDetour_FireBullets = NULL;
 CDetour *g_pDetour_SwingOrStab = NULL;
 int g_SH_SkipTwoEntitiesShouldHitEntity = 0;
 int g_SH_SimpleShouldHitEntity = 0;
+int g_SH_TriggerMoved = 0;
 
 uintptr_t g_CTraceFilterNoNPCsOrPlayer = 0;
 CTraceFilterSkipTwoEntities *g_CTraceFilterSkipTwoEntities = NULL;
 CTraceFilterSimple *g_CTraceFilterSimple = NULL;
+CTriggerMoved *g_CTriggerMoved = 0;
 
 /* Fix crash in CBaseFilter::InputTestActivator */
 DETOUR_DECL_MEMBER1(DETOUR_InputTestActivator, void, inputdata_t *, inputdata)
@@ -364,13 +375,24 @@ DETOUR_DECL_MEMBER1(DETOUR_SwingOrStab, bool, bool, bStab)
 
 DETOUR_DECL_STATIC1(DETOUR_RunThinkFunctions, void, bool, simulating)
 {
-	g_pOnRunThinkFunctions->PushCell(simulating);
-	g_pOnRunThinkFunctions->Execute();
+	if(g_pOnRunThinkFunctions->GetFunctionCount())
+	{
+		g_pOnRunThinkFunctions->PushCell(simulating);
+		g_pOnRunThinkFunctions->Execute();
+	}
+
+	if(g_pOnPrePlayerThinkFunctions->GetFunctionCount())
+	{
+		g_pOnPrePlayerThinkFunctions->Execute();
+	}
 
 	DETOUR_STATIC_CALL(DETOUR_RunThinkFunctions)(simulating);
 
-	g_pOnRunThinkFunctionsPost->PushCell(simulating);
-	g_pOnRunThinkFunctionsPost->Execute();
+	if(g_pOnRunThinkFunctionsPost->GetFunctionCount())
+	{
+		g_pOnRunThinkFunctionsPost->PushCell(simulating);
+		g_pOnRunThinkFunctionsPost->Execute();
+	}
 }
 
 void (*g_pPhysics_SimulateEntity)(CBaseEntity *pEntity) = NULL;
@@ -414,6 +436,12 @@ void Physics_SimulateEntity_CustomLoop(CBaseEntity **ppList, int Count, float St
 		g_pPhysics_SimulateEntity(apPlayers[i]);
 	}
 
+	// Post Player simulation done
+	if(g_pOnPostPlayerThinkFunctions->GetFunctionCount())
+	{
+		g_pOnPostPlayerThinkFunctions->Execute();
+	}
+
 	// Now simulate the rest
 	for(int i = 0; i < Count; i++)
 	{
@@ -425,6 +453,53 @@ void Physics_SimulateEntity_CustomLoop(CBaseEntity **ppList, int Count, float St
 		g_pPhysics_SimulateEntity(pEntity);
 	}
 }
+
+volatile int gv_FilterTriggerMoved = -1;
+// void IVEngineServer::TriggerMoved( edict_t *pTriggerEnt, bool testSurroundingBoundsOnly ) = 0;
+SH_DECL_HOOK2_void(IVEngineServer, TriggerMoved, SH_NOATTRIB, 0, edict_t *, bool);
+void TriggerMoved(edict_t *pTriggerEnt, bool testSurroundingBoundsOnly)
+{
+	if(gv_FilterTriggerMoved == -1)
+	{
+		RETURN_META(MRES_IGNORED);
+	}
+	else if(gv_FilterTriggerMoved == 0)
+	{
+		RETURN_META(MRES_SUPERCEDE);
+	}
+
+	RETURN_META(MRES_IGNORED);
+}
+
+// IterationRetval_t CTriggerMoved::EnumElement( IHandleEntity *pHandleEntity ) = 0;
+SH_DECL_HOOK1(CTriggerMoved, EnumElement, SH_NOATTRIB, 0, IterationRetval_t, IHandleEntity *);
+IterationRetval_t EnumElement(IHandleEntity *pHandleEntity)
+{
+	if(gv_FilterTriggerMoved <= 0)
+	{
+		RETURN_META_VALUE(MRES_IGNORED, ITERATION_CONTINUE);
+	}
+
+	IServerUnknown *pUnk = static_cast< IServerUnknown* >( pHandleEntity );
+	CBaseHandle hndl = pUnk->GetRefEHandle();
+	int index = hndl.GetEntryIndex();
+
+	if(index == gv_FilterTriggerMoved)
+	{
+		RETURN_META_VALUE(MRES_IGNORED, ITERATION_CONTINUE);
+	}
+	else
+	{
+		RETURN_META_VALUE(MRES_SUPERCEDE, ITERATION_CONTINUE);
+	}
+}
+
+cell_t FilterTriggerMoved(IPluginContext *pContext, const cell_t *params)
+{
+	gv_FilterTriggerMoved = params[1];
+	return 0;
+}
+
 
 bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 {
@@ -550,6 +625,22 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	g_SH_SkipTwoEntitiesShouldHitEntity = SH_ADD_DVPHOOK(CTraceFilterSkipTwoEntities, ShouldHitEntity, g_CTraceFilterSkipTwoEntities, SH_STATIC(ShouldHitEntity), true);
 	g_SH_SimpleShouldHitEntity = SH_ADD_DVPHOOK(CTraceFilterSimple, ShouldHitEntity, g_CTraceFilterSimple, SH_STATIC(ShouldHitEntity), true);
 
+
+	SH_ADD_HOOK(IVEngineServer, TriggerMoved, engine, SH_STATIC(TriggerMoved), false);
+
+	// Find VTable for CTriggerMoved
+	uintptr_t pCTriggerMoved;
+	if(!g_pGameConf->GetMemSig("CTriggerMoved", (void **)(&pCTriggerMoved)) || !pCTriggerMoved)
+	{
+		snprintf(error, maxlength, "Failed to find CTriggerMoved.\n");
+		SDK_OnUnload();
+		return false;
+	}
+	// First function in VTable
+	g_CTriggerMoved = (CTriggerMoved *)(pCTriggerMoved + 8);
+
+	g_SH_TriggerMoved = SH_ADD_DVPHOOK(CTriggerMoved, EnumElement, g_CTriggerMoved, SH_STATIC(EnumElement), false);
+
 	if(!g_pGameConf->GetMemSig("Physics_SimulateEntity", (void **)(&g_pPhysics_SimulateEntity)) || !g_pPhysics_SimulateEntity)
 	{
 		snprintf(error, maxlength, "Failed to find Physics_SimulateEntity.\n");
@@ -654,9 +745,22 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	dlclose(pEngineSo);
 
 	g_pOnRunThinkFunctions = forwards->CreateForward("OnRunThinkFunctions", ET_Ignore, 1, NULL, Param_Cell);
+	g_pOnPrePlayerThinkFunctions = forwards->CreateForward("OnPrePlayerThinkFunctions", ET_Ignore, 0, NULL);
+	g_pOnPostPlayerThinkFunctions = forwards->CreateForward("OnPostPlayerThinkFunctions", ET_Ignore, 0, NULL);
 	g_pOnRunThinkFunctionsPost = forwards->CreateForward("OnRunThinkFunctionsPost", ET_Ignore, 1, NULL, Param_Cell);
 
 	return true;
+}
+
+const sp_nativeinfo_t MyNatives[] =
+{
+	{ "FilterTriggerMoved", FilterTriggerMoved },
+	{ NULL, NULL }
+};
+
+void CSSFixes::SDK_OnAllLoaded()
+{
+	sharesys->AddNatives(myself, MyNatives);
 }
 
 void CSSFixes::SDK_OnUnload()
@@ -721,11 +825,26 @@ void CSSFixes::SDK_OnUnload()
 		g_pOnRunThinkFunctionsPost = NULL;
 	}
 
+	if(g_pOnPrePlayerThinkFunctions != NULL)
+	{
+		forwards->ReleaseForward(g_pOnPrePlayerThinkFunctions);
+		g_pOnPrePlayerThinkFunctions = NULL;
+	}
+
+	if(g_pOnPostPlayerThinkFunctions != NULL)
+	{
+		forwards->ReleaseForward(g_pOnPostPlayerThinkFunctions);
+		g_pOnPostPlayerThinkFunctions = NULL;
+	}
+
 	if(g_SH_SkipTwoEntitiesShouldHitEntity)
 		SH_REMOVE_HOOK_ID(g_SH_SkipTwoEntitiesShouldHitEntity);
 
 	if(g_SH_SimpleShouldHitEntity)
 		SH_REMOVE_HOOK_ID(g_SH_SimpleShouldHitEntity);
+
+	if(g_SH_TriggerMoved)
+		SH_REMOVE_HOOK_ID(g_SH_TriggerMoved);
 
 	gameconfs->CloseGameConfigFile(g_pGameConf);
 

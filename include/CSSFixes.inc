@@ -4,7 +4,15 @@
 #define _cssfixes_included
 
 forward void OnRunThinkFunctions(bool simulating);
+forward void OnPrePlayerThinkFunctions();
+forward void OnPostPlayerThinkFunctions();
 forward void OnRunThinkFunctionsPost(bool simulating);
+
+// -1 = Ignore, normal operation.
+// 0 = Block ALL SV_TriggerMoved.
+// >0 = Entity index for which to allow EnumElement to be called.
+// REMEMBER TO CALL THIS AGAIN WITH -1 AFTER USING IT !!!
+native void FilterTriggerMoved(int entity);
 
 public Extension __ext_CSSFixes =
 {
