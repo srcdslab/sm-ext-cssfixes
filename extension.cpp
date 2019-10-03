@@ -488,10 +488,8 @@ IterationRetval_t EnumElement(IHandleEntity *pHandleEntity)
 	{
 		RETURN_META_VALUE(MRES_IGNORED, ITERATION_CONTINUE);
 	}
-	else
-	{
-		RETURN_META_VALUE(MRES_SUPERCEDE, ITERATION_CONTINUE);
-	}
+
+	RETURN_META_VALUE(MRES_SUPERCEDE, ITERATION_CONTINUE);
 }
 
 cell_t FilterTriggerMoved(IPluginContext *pContext, const cell_t *params)
@@ -500,6 +498,35 @@ cell_t FilterTriggerMoved(IPluginContext *pContext, const cell_t *params)
 	return 0;
 }
 
+volatile int gv_BlockSolidMoved = -1;
+// void IVEngineServer::SolidMoved( edict_t *pSolidEnt, ICollideable *pSolidCollide, const Vector* pPrevAbsOrigin, bool testSurroundingBoundsOnly ) = 0;
+SH_DECL_HOOK4_void(IVEngineServer, SolidMoved, SH_NOATTRIB, 0, edict_t *, ICollideable *, const Vector *, bool);
+void SolidMoved(edict_t *pSolidEnt, ICollideable *pSolidCollide, const Vector *pPrevAbsOrigin, bool testSurroundingBoundsOnly)
+{
+	if(gv_BlockSolidMoved == -1)
+	{
+		RETURN_META(MRES_IGNORED);
+	}
+	else if(gv_BlockSolidMoved == 0)
+	{
+		RETURN_META(MRES_SUPERCEDE);
+	}
+
+	int Entity = gamehelpers->IndexOfEdict(pSolidEnt);
+
+	if(Entity != gv_BlockSolidMoved)
+	{
+		RETURN_META(MRES_SUPERCEDE);
+	}
+
+	RETURN_META(MRES_IGNORED);
+}
+
+cell_t BlockSolidMoved(IPluginContext *pContext, const cell_t *params)
+{
+	gv_BlockSolidMoved = params[1];
+	return 0;
+}
 
 bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 {
@@ -625,9 +652,6 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	g_SH_SkipTwoEntitiesShouldHitEntity = SH_ADD_DVPHOOK(CTraceFilterSkipTwoEntities, ShouldHitEntity, g_CTraceFilterSkipTwoEntities, SH_STATIC(ShouldHitEntity), true);
 	g_SH_SimpleShouldHitEntity = SH_ADD_DVPHOOK(CTraceFilterSimple, ShouldHitEntity, g_CTraceFilterSimple, SH_STATIC(ShouldHitEntity), true);
 
-
-	SH_ADD_HOOK(IVEngineServer, TriggerMoved, engine, SH_STATIC(TriggerMoved), false);
-
 	// Find VTable for CTriggerMoved
 	uintptr_t pCTriggerMoved;
 	if(!g_pGameConf->GetMemSig("CTriggerMoved", (void **)(&pCTriggerMoved)) || !pCTriggerMoved)
@@ -640,6 +664,9 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	g_CTriggerMoved = (CTriggerMoved *)(pCTriggerMoved + 8);
 
 	g_SH_TriggerMoved = SH_ADD_DVPHOOK(CTriggerMoved, EnumElement, g_CTriggerMoved, SH_STATIC(EnumElement), false);
+
+	SH_ADD_HOOK(IVEngineServer, TriggerMoved, engine, SH_STATIC(TriggerMoved), false);
+	SH_ADD_HOOK(IVEngineServer, SolidMoved, engine, SH_STATIC(SolidMoved), false);
 
 	if(!g_pGameConf->GetMemSig("Physics_SimulateEntity", (void **)(&g_pPhysics_SimulateEntity)) || !g_pPhysics_SimulateEntity)
 	{
@@ -755,12 +782,14 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 const sp_nativeinfo_t MyNatives[] =
 {
 	{ "FilterTriggerMoved", FilterTriggerMoved },
+	{ "BlockSolidMoved", BlockSolidMoved },
 	{ NULL, NULL }
 };
 
 void CSSFixes::SDK_OnAllLoaded()
 {
 	sharesys->AddNatives(myself, MyNatives);
+	sharesys->RegisterLibrary(myself, "CSSFixes");
 }
 
 void CSSFixes::SDK_OnUnload()
@@ -845,6 +874,9 @@ void CSSFixes::SDK_OnUnload()
 
 	if(g_SH_TriggerMoved)
 		SH_REMOVE_HOOK_ID(g_SH_TriggerMoved);
+
+	SH_REMOVE_HOOK(IVEngineServer, TriggerMoved, engine, SH_STATIC(TriggerMoved), false);
+	SH_REMOVE_HOOK(IVEngineServer, SolidMoved, engine, SH_STATIC(SolidMoved), false);
 
 	gameconfs->CloseGameConfigFile(g_pGameConf);
 

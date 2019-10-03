@@ -14,6 +14,12 @@ forward void OnRunThinkFunctionsPost(bool simulating);
 // REMEMBER TO CALL THIS AGAIN WITH -1 AFTER USING IT !!!
 native void FilterTriggerMoved(int entity);
 
+// -1 = Ignore, normal operation.
+// 0 = Block ALL SV_TriggerMoved.
+// >0 = Entity index for which to allow SV_TriggerMoved to be called.
+// REMEMBER TO CALL THIS AGAIN WITH -1 AFTER USING IT !!!
+native void BlockSolidMoved(int entity);
+
 public Extension __ext_CSSFixes =
 {
 	name = "CSSFixes",
