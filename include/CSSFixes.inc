@@ -20,6 +20,11 @@ native void FilterTriggerMoved(int entity);
 // REMEMBER TO CALL THIS AGAIN WITH -1 AFTER USING IT !!!
 native void BlockSolidMoved(int entity);
 
+// entities is an array which maps from entindex to a truth value
+// if the value is true then SolidMoved will not see this entity
+// REMEMBER TO CALL THIS WITH SIZE 0 0N PLUGIN END !!!
+native void FilterSolidMoved(int[] entities, int size);
+
 public Extension __ext_CSSFixes =
 {
 	name = "CSSFixes",

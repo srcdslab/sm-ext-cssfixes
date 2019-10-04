@@ -91,6 +91,12 @@ public:
 	virtual IterationRetval_t EnumElement( IHandleEntity *pHandleEntity ) = 0;
 };
 
+class CTouchLinks : public IPartitionEnumerator
+{
+public:
+	virtual IterationRetval_t EnumElement( IHandleEntity *pHandleEntity ) = 0;
+};
+
 static struct SrcdsPatch
 {
 	const char *pSignature;
@@ -195,11 +201,13 @@ CDetour *g_pDetour_SwingOrStab = NULL;
 int g_SH_SkipTwoEntitiesShouldHitEntity = 0;
 int g_SH_SimpleShouldHitEntity = 0;
 int g_SH_TriggerMoved = 0;
+int g_SH_TouchLinks = 0;
 
 uintptr_t g_CTraceFilterNoNPCsOrPlayer = 0;
 CTraceFilterSkipTwoEntities *g_CTraceFilterSkipTwoEntities = NULL;
 CTraceFilterSimple *g_CTraceFilterSimple = NULL;
 CTriggerMoved *g_CTriggerMoved = 0;
+CTouchLinks *g_CTouchLinks = 0;
 
 /* Fix crash in CBaseFilter::InputTestActivator */
 DETOUR_DECL_MEMBER1(DETOUR_InputTestActivator, void, inputdata_t *, inputdata)
@@ -256,7 +264,7 @@ DETOUR_DECL_MEMBER2(DETOUR_KeyValue, bool, const char *, szKeyName, const char *
 }
 
 /* Ignore players in +USE trace */
-volatile bool gv_InFindUseEntity = false;
+bool gv_InFindUseEntity = false;
 DETOUR_DECL_MEMBER0(DETOUR_FindUseEntity, CBaseEntity *)
 {
 	// Signal CTraceFilterSimple that we are in FindUseEntity
@@ -275,8 +283,8 @@ DETOUR_DECL_MEMBER3(DETOUR_CTraceFilterSimple, void, const IHandleEntity *, pass
 }
 
 /* Make bullets ignore teammates */
-volatile bool gv_InFireBullets = false;
-volatile int gv_FireBulletPlayerTeam = 0;
+bool gv_InFireBullets = false;
+int gv_FireBulletPlayerTeam = 0;
 SH_DECL_HOOK2(CTraceFilterSkipTwoEntities, ShouldHitEntity, SH_NOATTRIB, 0, bool, IHandleEntity *, int);
 SH_DECL_HOOK2(CTraceFilterSimple, ShouldHitEntity, SH_NOATTRIB, 0, bool, IHandleEntity *, int);
 bool ShouldHitEntity(IHandleEntity *pHandleEntity, int contentsMask)
@@ -454,7 +462,7 @@ void Physics_SimulateEntity_CustomLoop(CBaseEntity **ppList, int Count, float St
 	}
 }
 
-volatile int gv_FilterTriggerMoved = -1;
+int gv_FilterTriggerMoved = -1;
 // void IVEngineServer::TriggerMoved( edict_t *pTriggerEnt, bool testSurroundingBoundsOnly ) = 0;
 SH_DECL_HOOK2_void(IVEngineServer, TriggerMoved, SH_NOATTRIB, 0, edict_t *, bool);
 void TriggerMoved(edict_t *pTriggerEnt, bool testSurroundingBoundsOnly)
@@ -473,7 +481,7 @@ void TriggerMoved(edict_t *pTriggerEnt, bool testSurroundingBoundsOnly)
 
 // IterationRetval_t CTriggerMoved::EnumElement( IHandleEntity *pHandleEntity ) = 0;
 SH_DECL_HOOK1(CTriggerMoved, EnumElement, SH_NOATTRIB, 0, IterationRetval_t, IHandleEntity *);
-IterationRetval_t EnumElement(IHandleEntity *pHandleEntity)
+IterationRetval_t TriggerMoved_EnumElement(IHandleEntity *pHandleEntity)
 {
 	if(gv_FilterTriggerMoved <= 0)
 	{
@@ -498,11 +506,16 @@ cell_t FilterTriggerMoved(IPluginContext *pContext, const cell_t *params)
 	return 0;
 }
 
-volatile int gv_BlockSolidMoved = -1;
+int gv_SolidEntityMoved;
+int gv_BlockSolidMoved = -1;
+cell_t *gv_pFilterSolidMoved = NULL;
+cell_t gv_FilterSolidMovedLen = 0;
 // void IVEngineServer::SolidMoved( edict_t *pSolidEnt, ICollideable *pSolidCollide, const Vector* pPrevAbsOrigin, bool testSurroundingBoundsOnly ) = 0;
 SH_DECL_HOOK4_void(IVEngineServer, SolidMoved, SH_NOATTRIB, 0, edict_t *, ICollideable *, const Vector *, bool);
 void SolidMoved(edict_t *pSolidEnt, ICollideable *pSolidCollide, const Vector *pPrevAbsOrigin, bool testSurroundingBoundsOnly)
 {
+	gv_SolidEntityMoved = gamehelpers->IndexOfEdict(pSolidEnt);
+
 	if(gv_BlockSolidMoved == -1)
 	{
 		RETURN_META(MRES_IGNORED);
@@ -512,14 +525,50 @@ void SolidMoved(edict_t *pSolidEnt, ICollideable *pSolidCollide, const Vector *p
 		RETURN_META(MRES_SUPERCEDE);
 	}
 
-	int Entity = gamehelpers->IndexOfEdict(pSolidEnt);
-
-	if(Entity != gv_BlockSolidMoved)
+	if(gv_SolidEntityMoved != gv_BlockSolidMoved)
 	{
 		RETURN_META(MRES_SUPERCEDE);
 	}
 
 	RETURN_META(MRES_IGNORED);
+}
+
+// IterationRetval_t CTouchLinks::EnumElement( IHandleEntity *pHandleEntity ) = 0;
+SH_DECL_HOOK1(CTouchLinks, EnumElement, SH_NOATTRIB, 0, IterationRetval_t, IHandleEntity *);
+IterationRetval_t TouchLinks_EnumElement(IHandleEntity *pHandleEntity)
+{
+	IServerUnknown *pUnk = static_cast< IServerUnknown* >( pHandleEntity );
+	CBaseHandle hndl = pUnk->GetRefEHandle();
+	int index = hndl.GetEntryIndex();
+
+	// Optimization: Players shouldn't touch other players
+	if(gv_SolidEntityMoved <= SM_MAXPLAYERS && index <= SM_MAXPLAYERS)
+	{
+		RETURN_META_VALUE(MRES_SUPERCEDE, ITERATION_CONTINUE);
+	}
+
+	if(!gv_pFilterSolidMoved || index >= gv_FilterSolidMovedLen)
+	{
+		RETURN_META_VALUE(MRES_IGNORED, ITERATION_CONTINUE);
+	}
+
+	if(gv_pFilterSolidMoved[index])
+	{
+		RETURN_META_VALUE(MRES_SUPERCEDE, ITERATION_CONTINUE);
+	}
+
+	RETURN_META_VALUE(MRES_IGNORED, ITERATION_CONTINUE);
+}
+
+cell_t FilterSolidMoved(IPluginContext *pContext, const cell_t *params)
+{
+	gv_FilterSolidMovedLen = params[2];
+	if(gv_FilterSolidMovedLen)
+		pContext->LocalToPhysAddr(params[1], &gv_pFilterSolidMoved);
+	else
+		gv_pFilterSolidMoved = NULL;
+
+	return 0;
 }
 
 cell_t BlockSolidMoved(IPluginContext *pContext, const cell_t *params)
@@ -663,7 +712,19 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	// First function in VTable
 	g_CTriggerMoved = (CTriggerMoved *)(pCTriggerMoved + 8);
 
-	g_SH_TriggerMoved = SH_ADD_DVPHOOK(CTriggerMoved, EnumElement, g_CTriggerMoved, SH_STATIC(EnumElement), false);
+	// Find VTable for CTouchLinks
+	uintptr_t pCTouchLinks;
+	if(!g_pGameConf->GetMemSig("CTouchLinks", (void **)(&pCTouchLinks)) || !pCTouchLinks)
+	{
+		snprintf(error, maxlength, "Failed to find CTouchLinks.\n");
+		SDK_OnUnload();
+		return false;
+	}
+	// First function in VTable
+	g_CTouchLinks = (CTouchLinks *)(pCTouchLinks + 8);
+
+	g_SH_TriggerMoved = SH_ADD_DVPHOOK(CTriggerMoved, EnumElement, g_CTriggerMoved, SH_STATIC(TriggerMoved_EnumElement), false);
+	g_SH_TouchLinks = SH_ADD_DVPHOOK(CTouchLinks, EnumElement, g_CTouchLinks, SH_STATIC(TouchLinks_EnumElement), false);
 
 	SH_ADD_HOOK(IVEngineServer, TriggerMoved, engine, SH_STATIC(TriggerMoved), false);
 	SH_ADD_HOOK(IVEngineServer, SolidMoved, engine, SH_STATIC(SolidMoved), false);
@@ -782,6 +843,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 const sp_nativeinfo_t MyNatives[] =
 {
 	{ "FilterTriggerMoved", FilterTriggerMoved },
+	{ "FilterSolidMoved", FilterSolidMoved },
 	{ "BlockSolidMoved", BlockSolidMoved },
 	{ NULL, NULL }
 };
@@ -874,6 +936,9 @@ void CSSFixes::SDK_OnUnload()
 
 	if(g_SH_TriggerMoved)
 		SH_REMOVE_HOOK_ID(g_SH_TriggerMoved);
+
+	if(g_SH_TouchLinks)
+		SH_REMOVE_HOOK_ID(g_SH_TouchLinks);
 
 	SH_REMOVE_HOOK(IVEngineServer, TriggerMoved, engine, SH_STATIC(TriggerMoved), false);
 	SH_REMOVE_HOOK(IVEngineServer, SolidMoved, engine, SH_STATIC(SolidMoved), false);

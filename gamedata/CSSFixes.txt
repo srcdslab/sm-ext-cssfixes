@@ -87,6 +87,12 @@
 				"library"	"engine"
 				"linux"		"@_ZTV13CTriggerMoved"
 			}
+
+			"CTouchLinks"
+			{
+				"library"	"engine"
+				"linux"		"@_ZTV11CTouchLinks"
+			}
 		}
 	}
 }
