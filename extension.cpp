@@ -462,20 +462,25 @@ void Physics_SimulateEntity_CustomLoop(CBaseEntity **ppList, int Count, float St
 	}
 }
 
-int gv_FilterTriggerMoved = -1;
+int g_FilterTriggerMoved = -1;
 // void IVEngineServer::TriggerMoved( edict_t *pTriggerEnt, bool testSurroundingBoundsOnly ) = 0;
 SH_DECL_HOOK2_void(IVEngineServer, TriggerMoved, SH_NOATTRIB, 0, edict_t *, bool);
 void TriggerMoved(edict_t *pTriggerEnt, bool testSurroundingBoundsOnly)
 {
-	if(gv_FilterTriggerMoved == -1)
+	int index = gamehelpers->IndexOfEdict(pTriggerEnt);
+
+	// Allow all
+	if(g_FilterTriggerMoved == -1)
 	{
 		RETURN_META(MRES_IGNORED);
 	}
-	else if(gv_FilterTriggerMoved == 0)
+	// Block All
+	else if(g_FilterTriggerMoved == 0)
 	{
 		RETURN_META(MRES_SUPERCEDE);
 	}
 
+	// Decide per entity in TriggerMoved_EnumElement
 	RETURN_META(MRES_IGNORED);
 }
 
@@ -483,7 +488,7 @@ void TriggerMoved(edict_t *pTriggerEnt, bool testSurroundingBoundsOnly)
 SH_DECL_HOOK1(CTriggerMoved, EnumElement, SH_NOATTRIB, 0, IterationRetval_t, IHandleEntity *);
 IterationRetval_t TriggerMoved_EnumElement(IHandleEntity *pHandleEntity)
 {
-	if(gv_FilterTriggerMoved <= 0)
+	if(g_FilterTriggerMoved <= 0)
 	{
 		RETURN_META_VALUE(MRES_IGNORED, ITERATION_CONTINUE);
 	}
@@ -492,44 +497,55 @@ IterationRetval_t TriggerMoved_EnumElement(IHandleEntity *pHandleEntity)
 	CBaseHandle hndl = pUnk->GetRefEHandle();
 	int index = hndl.GetEntryIndex();
 
-	if(index == gv_FilterTriggerMoved)
+	// We only care about players
+	if(index > SM_MAXPLAYERS)
 	{
 		RETURN_META_VALUE(MRES_IGNORED, ITERATION_CONTINUE);
 	}
 
+	// only allow touching his player if filter is active
+	if(index == g_FilterTriggerMoved)
+	{
+		RETURN_META_VALUE(MRES_IGNORED, ITERATION_CONTINUE);
+	}
+
+	// block from touch all other players
 	RETURN_META_VALUE(MRES_SUPERCEDE, ITERATION_CONTINUE);
 }
 
 cell_t FilterTriggerMoved(IPluginContext *pContext, const cell_t *params)
 {
-	gv_FilterTriggerMoved = params[1];
+	g_FilterTriggerMoved = params[1];
 	return 0;
 }
 
-int gv_SolidEntityMoved;
-int gv_BlockSolidMoved = -1;
-cell_t *gv_pFilterSolidMoved = NULL;
-cell_t gv_FilterSolidMovedLen = 0;
+int g_SolidEntityMoved;
+int g_BlockSolidMoved = -1;
+char *g_pFilterClientEntityMap = NULL;
 // void IVEngineServer::SolidMoved( edict_t *pSolidEnt, ICollideable *pSolidCollide, const Vector* pPrevAbsOrigin, bool testSurroundingBoundsOnly ) = 0;
 SH_DECL_HOOK4_void(IVEngineServer, SolidMoved, SH_NOATTRIB, 0, edict_t *, ICollideable *, const Vector *, bool);
 void SolidMoved(edict_t *pSolidEnt, ICollideable *pSolidCollide, const Vector *pPrevAbsOrigin, bool testSurroundingBoundsOnly)
 {
-	gv_SolidEntityMoved = gamehelpers->IndexOfEdict(pSolidEnt);
+	g_SolidEntityMoved = gamehelpers->IndexOfEdict(pSolidEnt);
 
-	if(gv_BlockSolidMoved == -1)
+	// Allow all
+	if(g_BlockSolidMoved == -1)
 	{
 		RETURN_META(MRES_IGNORED);
 	}
-	else if(gv_BlockSolidMoved == 0)
+	// Block all
+	else if(g_BlockSolidMoved == 0)
 	{
 		RETURN_META(MRES_SUPERCEDE);
 	}
 
-	if(gv_SolidEntityMoved != gv_BlockSolidMoved)
+	// Block filtered entity
+	if(g_SolidEntityMoved == g_BlockSolidMoved)
 	{
 		RETURN_META(MRES_SUPERCEDE);
 	}
 
+	// Allow all others
 	RETURN_META(MRES_IGNORED);
 }
 
@@ -542,38 +558,50 @@ IterationRetval_t TouchLinks_EnumElement(IHandleEntity *pHandleEntity)
 	int index = hndl.GetEntryIndex();
 
 	// Optimization: Players shouldn't touch other players
-	if(gv_SolidEntityMoved <= SM_MAXPLAYERS && index <= SM_MAXPLAYERS)
+	if(g_SolidEntityMoved <= SM_MAXPLAYERS && index <= SM_MAXPLAYERS)
 	{
 		RETURN_META_VALUE(MRES_SUPERCEDE, ITERATION_CONTINUE);
 	}
 
-	if(!gv_pFilterSolidMoved || index >= gv_FilterSolidMovedLen)
+	// We only care about players
+	if(g_SolidEntityMoved > SM_MAXPLAYERS)
 	{
 		RETURN_META_VALUE(MRES_IGNORED, ITERATION_CONTINUE);
 	}
 
-	if(gv_pFilterSolidMoved[index])
+	// Do we have our filter map and is the entity within it? (can it even be > 2048?)
+	if(!g_pFilterClientEntityMap || index >= 2048)
+	{
+		RETURN_META_VALUE(MRES_IGNORED, ITERATION_CONTINUE);
+	}
+
+	// SourcePawn char map[MAXPLAYERS + 1][2048]
+	// Contiguous memory, shift array by client idx * 2048
+	int arrayIdx = g_SolidEntityMoved * 2048 + index;
+
+	// Block player from touching this entity if it's filtered
+	if(g_pFilterClientEntityMap[arrayIdx])
 	{
 		RETURN_META_VALUE(MRES_SUPERCEDE, ITERATION_CONTINUE);
 	}
 
+	// Allow otherwise
 	RETURN_META_VALUE(MRES_IGNORED, ITERATION_CONTINUE);
-}
-
-cell_t FilterSolidMoved(IPluginContext *pContext, const cell_t *params)
-{
-	gv_FilterSolidMovedLen = params[2];
-	if(gv_FilterSolidMovedLen)
-		pContext->LocalToPhysAddr(params[1], &gv_pFilterSolidMoved);
-	else
-		gv_pFilterSolidMoved = NULL;
-
-	return 0;
 }
 
 cell_t BlockSolidMoved(IPluginContext *pContext, const cell_t *params)
 {
-	gv_BlockSolidMoved = params[1];
+	g_BlockSolidMoved = params[1];
+	return 0;
+}
+
+cell_t FilterClientEntityMap(IPluginContext *pContext, const cell_t *params)
+{
+	if(params[2])
+		pContext->LocalToPhysAddr(params[1], (cell_t **)&g_pFilterClientEntityMap);
+	else
+		g_pFilterClientEntityMap = NULL;
+
 	return 0;
 }
 
@@ -843,8 +871,8 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 const sp_nativeinfo_t MyNatives[] =
 {
 	{ "FilterTriggerMoved", FilterTriggerMoved },
-	{ "FilterSolidMoved", FilterSolidMoved },
 	{ "BlockSolidMoved", BlockSolidMoved },
+	{ "FilterClientEntityMap", FilterClientEntityMap },
 	{ NULL, NULL }
 };
 

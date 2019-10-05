@@ -15,15 +15,13 @@ forward void OnRunThinkFunctionsPost(bool simulating);
 native void FilterTriggerMoved(int entity);
 
 // -1 = Ignore, normal operation.
-// 0 = Block ALL SV_TriggerMoved.
-// >0 = Entity index for which to allow SV_TriggerMoved to be called.
+// 0 = Block ALL SV_SolidMoved.
+// >0 = Entity index for which to allow SV_SolidMoved to be called.
 // REMEMBER TO CALL THIS AGAIN WITH -1 AFTER USING IT !!!
 native void BlockSolidMoved(int entity);
 
-// entities is an array which maps from entindex to a truth value
-// if the value is true then SolidMoved will not see this entity
-// REMEMBER TO CALL THIS WITH SIZE 0 0N PLUGIN END !!!
-native void FilterSolidMoved(int[] entities, int size);
+// Block clients SolidMoved from touching an entity by setting it to 1 in the clients map.
+native void FilterClientEntityMap(char map[MAXPLAYERS + 1][2048], bool set);
 
 public Extension __ext_CSSFixes =
 {
