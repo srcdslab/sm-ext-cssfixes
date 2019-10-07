@@ -462,12 +462,14 @@ void Physics_SimulateEntity_CustomLoop(CBaseEntity **ppList, int Count, float St
 	}
 }
 
+int g_TriggerEntityMoved;
+char *g_aFilterTriggerTouchPlayers = NULL;
 int g_FilterTriggerMoved = -1;
 // void IVEngineServer::TriggerMoved( edict_t *pTriggerEnt, bool testSurroundingBoundsOnly ) = 0;
 SH_DECL_HOOK2_void(IVEngineServer, TriggerMoved, SH_NOATTRIB, 0, edict_t *, bool);
 void TriggerMoved(edict_t *pTriggerEnt, bool testSurroundingBoundsOnly)
 {
-	int index = gamehelpers->IndexOfEdict(pTriggerEnt);
+	g_TriggerEntityMoved = gamehelpers->IndexOfEdict(pTriggerEnt);
 
 	// Allow all
 	if(g_FilterTriggerMoved == -1)
@@ -488,7 +490,7 @@ void TriggerMoved(edict_t *pTriggerEnt, bool testSurroundingBoundsOnly)
 SH_DECL_HOOK1(CTriggerMoved, EnumElement, SH_NOATTRIB, 0, IterationRetval_t, IHandleEntity *);
 IterationRetval_t TriggerMoved_EnumElement(IHandleEntity *pHandleEntity)
 {
-	if(g_FilterTriggerMoved <= 0)
+	if(g_FilterTriggerMoved <= 0 && !g_aFilterTriggerTouchPlayers)
 	{
 		RETURN_META_VALUE(MRES_IGNORED, ITERATION_CONTINUE);
 	}
@@ -503,7 +505,13 @@ IterationRetval_t TriggerMoved_EnumElement(IHandleEntity *pHandleEntity)
 		RETURN_META_VALUE(MRES_IGNORED, ITERATION_CONTINUE);
 	}
 
-	// only allow touching his player if filter is active
+	// block touching any clients here if map exists and evaluates to true
+	if(g_aFilterTriggerTouchPlayers && g_aFilterTriggerTouchPlayers[g_TriggerEntityMoved])
+	{
+		RETURN_META_VALUE(MRES_SUPERCEDE, ITERATION_CONTINUE);
+	}
+
+	// only allow touching this player if filter is active
 	if(index == g_FilterTriggerMoved)
 	{
 		RETURN_META_VALUE(MRES_IGNORED, ITERATION_CONTINUE);
@@ -516,6 +524,16 @@ IterationRetval_t TriggerMoved_EnumElement(IHandleEntity *pHandleEntity)
 cell_t FilterTriggerMoved(IPluginContext *pContext, const cell_t *params)
 {
 	g_FilterTriggerMoved = params[1];
+	return 0;
+}
+
+cell_t FilterTriggerTouchPlayers(IPluginContext *pContext, const cell_t *params)
+{
+	if(params[2])
+		pContext->LocalToPhysAddr(params[1], (cell_t **)&g_aFilterTriggerTouchPlayers);
+	else
+		g_aFilterTriggerTouchPlayers = NULL;
+
 	return 0;
 }
 
@@ -873,6 +891,7 @@ const sp_nativeinfo_t MyNatives[] =
 	{ "FilterTriggerMoved", FilterTriggerMoved },
 	{ "BlockSolidMoved", BlockSolidMoved },
 	{ "FilterClientEntityMap", FilterClientEntityMap },
+	{ "FilterTriggerTouchPlayers", FilterTriggerTouchPlayers },
 	{ NULL, NULL }
 };
 

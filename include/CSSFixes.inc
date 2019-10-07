@@ -23,6 +23,9 @@ native void BlockSolidMoved(int entity);
 // Block clients SolidMoved from touching an entity by setting it to 1 in the clients map.
 native void FilterClientEntityMap(char map[MAXPLAYERS + 1][2048], bool set);
 
+// Block triggers TriggerMoved from touching any client by setting it to 1 for the entity index.
+native void FilterTriggerTouchPlayers(char map[2048], bool set);
+
 public Extension __ext_CSSFixes =
 {
 	name = "CSSFixes",
