@@ -26,6 +26,10 @@ native void FilterClientEntityMap(char map[MAXPLAYERS + 1][2048], bool set);
 // Block triggers TriggerMoved from touching any client by setting it to 1 for the entity index.
 native void FilterTriggerTouchPlayers(char map[2048], bool set);
 
+// Map entities to client entity in FireBullets/SwingOrStab ShouldHitEntity.
+// Aka. shoot and knife through physboxes that are parented to teammates (white knight, gandalf, horse, etc.)
+native void PhysboxToClientMap(char map[2048], bool set);
+
 public Extension __ext_CSSFixes =
 {
 	name = "CSSFixes",

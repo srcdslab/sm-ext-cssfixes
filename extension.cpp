@@ -264,13 +264,13 @@ DETOUR_DECL_MEMBER2(DETOUR_KeyValue, bool, const char *, szKeyName, const char *
 }
 
 /* Ignore players in +USE trace */
-bool gv_InFindUseEntity = false;
+bool g_InFindUseEntity = false;
 DETOUR_DECL_MEMBER0(DETOUR_FindUseEntity, CBaseEntity *)
 {
 	// Signal CTraceFilterSimple that we are in FindUseEntity
-	gv_InFindUseEntity = true;
+	g_InFindUseEntity = true;
 	CBaseEntity *pEntity = DETOUR_MEMBER_CALL(DETOUR_FindUseEntity)();
-	gv_InFindUseEntity = false;
+	g_InFindUseEntity = false;
 	return pEntity;
 }
 DETOUR_DECL_MEMBER3(DETOUR_CTraceFilterSimple, void, const IHandleEntity *, passedict, int, collisionGroup, ShouldHitFunc_t, pExtraShouldHitFunc)
@@ -278,34 +278,37 @@ DETOUR_DECL_MEMBER3(DETOUR_CTraceFilterSimple, void, const IHandleEntity *, pass
 	DETOUR_MEMBER_CALL(DETOUR_CTraceFilterSimple)(passedict, collisionGroup, pExtraShouldHitFunc);
 
 	// If we're in FindUseEntity right now then switch out the VTable
-	if(gv_InFindUseEntity)
+	if(g_InFindUseEntity)
 		*(uintptr_t *)this = g_CTraceFilterNoNPCsOrPlayer;
 }
 
 /* Make bullets ignore teammates */
-bool gv_InFireBullets = false;
-int gv_FireBulletPlayerTeam = 0;
+char *g_pPhysboxToClientMap = NULL;
+bool g_InFireBullets = false;
+int g_FireBulletPlayerTeam = 0;
 SH_DECL_HOOK2(CTraceFilterSkipTwoEntities, ShouldHitEntity, SH_NOATTRIB, 0, bool, IHandleEntity *, int);
 SH_DECL_HOOK2(CTraceFilterSimple, ShouldHitEntity, SH_NOATTRIB, 0, bool, IHandleEntity *, int);
 bool ShouldHitEntity(IHandleEntity *pHandleEntity, int contentsMask)
 {
-	if(!gv_InFireBullets)
+	if(!g_InFireBullets)
 		RETURN_META_VALUE(MRES_IGNORED, true);
 
 	if(META_RESULT_ORIG_RET(bool) == false)
 		RETURN_META_VALUE(MRES_IGNORED, false);
 
 	IServerUnknown *pUnk = (IServerUnknown *)pHandleEntity;
+	CBaseHandle hndl = pUnk->GetRefEHandle();
+	int index = hndl.GetEntryIndex();
 
-	IServerNetworkable *pNetworkAble = pUnk->GetNetworkable();
-	if(!pNetworkAble)
+	if(index > SM_MAXPLAYERS && g_pPhysboxToClientMap && index < 2048)
+	{
+		index = g_pPhysboxToClientMap[index];
+	}
+
+	if(index < 1 || index > SM_MAXPLAYERS)
 		RETURN_META_VALUE(MRES_IGNORED, true);
 
-	edict_t *pEdict = pNetworkAble->GetEdict();
-	if(!pEdict)
-		RETURN_META_VALUE(MRES_IGNORED, true);
-
-	IGamePlayer *pPlayer = playerhelpers->GetGamePlayer(pEdict);
+	IGamePlayer *pPlayer = playerhelpers->GetGamePlayer(index);
 	if(!pPlayer)
 		RETURN_META_VALUE(MRES_IGNORED, true);
 
@@ -314,7 +317,7 @@ bool ShouldHitEntity(IHandleEntity *pHandleEntity, int contentsMask)
 		RETURN_META_VALUE(MRES_IGNORED, true);
 
 	int iTeam = pInfo->GetTeamIndex();
-	if(iTeam == gv_FireBulletPlayerTeam)
+	if(iTeam == g_FireBulletPlayerTeam)
 		RETURN_META_VALUE(MRES_SUPERCEDE, false);
 
 	RETURN_META_VALUE(MRES_IGNORED, true);
@@ -333,11 +336,11 @@ DETOUR_DECL_STATIC9(DETOUR_FireBullets, void, int, iPlayerIndex, const Vector *,
 	if(!pInfo)
 		return DETOUR_STATIC_CALL(DETOUR_FireBullets)(iPlayerIndex, vOrigin, vAngles, iWeaponID, iMode, iSeed, flSpread, _f1, _f2);
 
-	gv_FireBulletPlayerTeam = pInfo->GetTeamIndex();
+	g_FireBulletPlayerTeam = pInfo->GetTeamIndex();
 
-	gv_InFireBullets = true;
+	g_InFireBullets = true;
 	DETOUR_STATIC_CALL(DETOUR_FireBullets)(iPlayerIndex, vOrigin, vAngles, iWeaponID, iMode, iSeed, flSpread, _f1, _f2);
-	gv_InFireBullets = false;
+	g_InFireBullets = false;
 }
 
 DETOUR_DECL_MEMBER1(DETOUR_SwingOrStab, bool, bool, bStab)
@@ -372,13 +375,23 @@ DETOUR_DECL_MEMBER1(DETOUR_SwingOrStab, bool, bool, bStab)
 	if(!pInfo)
 		return DETOUR_MEMBER_CALL(DETOUR_SwingOrStab)(bStab);
 
-	gv_FireBulletPlayerTeam = pInfo->GetTeamIndex();
+	g_FireBulletPlayerTeam = pInfo->GetTeamIndex();
 
-	gv_InFireBullets = true;
+	g_InFireBullets = true;
 	bool bRet = DETOUR_MEMBER_CALL(DETOUR_SwingOrStab)(bStab);
-	gv_InFireBullets = false;
+	g_InFireBullets = false;
 
 	return bRet;
+}
+
+cell_t PhysboxToClientMap(IPluginContext *pContext, const cell_t *params)
+{
+	if(params[2])
+		pContext->LocalToPhysAddr(params[1], (cell_t **)&g_pPhysboxToClientMap);
+	else
+		g_pPhysboxToClientMap = NULL;
+
+	return 0;
 }
 
 DETOUR_DECL_STATIC1(DETOUR_RunThinkFunctions, void, bool, simulating)
@@ -463,7 +476,7 @@ void Physics_SimulateEntity_CustomLoop(CBaseEntity **ppList, int Count, float St
 }
 
 int g_TriggerEntityMoved;
-char *g_aFilterTriggerTouchPlayers = NULL;
+char *g_pFilterTriggerTouchPlayers = NULL;
 int g_FilterTriggerMoved = -1;
 // void IVEngineServer::TriggerMoved( edict_t *pTriggerEnt, bool testSurroundingBoundsOnly ) = 0;
 SH_DECL_HOOK2_void(IVEngineServer, TriggerMoved, SH_NOATTRIB, 0, edict_t *, bool);
@@ -490,7 +503,7 @@ void TriggerMoved(edict_t *pTriggerEnt, bool testSurroundingBoundsOnly)
 SH_DECL_HOOK1(CTriggerMoved, EnumElement, SH_NOATTRIB, 0, IterationRetval_t, IHandleEntity *);
 IterationRetval_t TriggerMoved_EnumElement(IHandleEntity *pHandleEntity)
 {
-	if(g_FilterTriggerMoved <= 0 && !g_aFilterTriggerTouchPlayers)
+	if(g_FilterTriggerMoved <= 0 && !g_pFilterTriggerTouchPlayers)
 	{
 		RETURN_META_VALUE(MRES_IGNORED, ITERATION_CONTINUE);
 	}
@@ -506,7 +519,7 @@ IterationRetval_t TriggerMoved_EnumElement(IHandleEntity *pHandleEntity)
 	}
 
 	// block touching any clients here if map exists and evaluates to true
-	if(g_aFilterTriggerTouchPlayers && g_aFilterTriggerTouchPlayers[g_TriggerEntityMoved])
+	if(g_pFilterTriggerTouchPlayers && g_pFilterTriggerTouchPlayers[g_TriggerEntityMoved])
 	{
 		RETURN_META_VALUE(MRES_SUPERCEDE, ITERATION_CONTINUE);
 	}
@@ -530,9 +543,9 @@ cell_t FilterTriggerMoved(IPluginContext *pContext, const cell_t *params)
 cell_t FilterTriggerTouchPlayers(IPluginContext *pContext, const cell_t *params)
 {
 	if(params[2])
-		pContext->LocalToPhysAddr(params[1], (cell_t **)&g_aFilterTriggerTouchPlayers);
+		pContext->LocalToPhysAddr(params[1], (cell_t **)&g_pFilterTriggerTouchPlayers);
 	else
-		g_aFilterTriggerTouchPlayers = NULL;
+		g_pFilterTriggerTouchPlayers = NULL;
 
 	return 0;
 }
@@ -892,6 +905,7 @@ const sp_nativeinfo_t MyNatives[] =
 	{ "BlockSolidMoved", BlockSolidMoved },
 	{ "FilterClientEntityMap", FilterClientEntityMap },
 	{ "FilterTriggerTouchPlayers", FilterTriggerTouchPlayers },
+	{ "PhysboxToClientMap", PhysboxToClientMap },
 	{ NULL, NULL }
 };
 
