@@ -524,14 +524,14 @@ IterationRetval_t TriggerMoved_EnumElement(IHandleEntity *pHandleEntity)
 		RETURN_META_VALUE(MRES_SUPERCEDE, ITERATION_CONTINUE);
 	}
 
-	// only allow touching this player if filter is active
-	if(index == g_FilterTriggerMoved)
+	// if filter is active block touch from all other players
+	if(g_FilterTriggerMoved > 0 && index != g_FilterTriggerMoved)
 	{
-		RETURN_META_VALUE(MRES_IGNORED, ITERATION_CONTINUE);
+		RETURN_META_VALUE(MRES_SUPERCEDE, ITERATION_CONTINUE);
 	}
 
-	// block from touch all other players
-	RETURN_META_VALUE(MRES_SUPERCEDE, ITERATION_CONTINUE);
+	// allow touch
+	RETURN_META_VALUE(MRES_IGNORED, ITERATION_CONTINUE);
 }
 
 cell_t FilterTriggerMoved(IPluginContext *pContext, const cell_t *params)
