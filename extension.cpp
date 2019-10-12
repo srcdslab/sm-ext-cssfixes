@@ -309,7 +309,7 @@ bool ShouldHitEntity(IHandleEntity *pHandleEntity, int contentsMask)
 		RETURN_META_VALUE(MRES_IGNORED, true);
 
 	IGamePlayer *pPlayer = playerhelpers->GetGamePlayer(index);
-	if(!pPlayer)
+	if(!pPlayer || !pPlayer->GetEdict())
 		RETURN_META_VALUE(MRES_IGNORED, true);
 
 	IPlayerInfo *pInfo = pPlayer->GetPlayerInfo();
@@ -329,7 +329,7 @@ DETOUR_DECL_STATIC9(DETOUR_FireBullets, void, int, iPlayerIndex, const Vector *,
 		return DETOUR_STATIC_CALL(DETOUR_FireBullets)(iPlayerIndex, vOrigin, vAngles, iWeaponID, iMode, iSeed, flSpread, _f1, _f2);
 
 	IGamePlayer *pPlayer = playerhelpers->GetGamePlayer(iPlayerIndex);
-	if(!pPlayer)
+	if(!pPlayer || !pPlayer->GetEdict())
 		return DETOUR_STATIC_CALL(DETOUR_FireBullets)(iPlayerIndex, vOrigin, vAngles, iWeaponID, iMode, iSeed, flSpread, _f1, _f2);
 
 	IPlayerInfo *pInfo = pPlayer->GetPlayerInfo();
@@ -368,7 +368,7 @@ DETOUR_DECL_MEMBER1(DETOUR_SwingOrStab, bool, bool, bStab)
 		return DETOUR_MEMBER_CALL(DETOUR_SwingOrStab)(bStab);
 
 	IGamePlayer *pPlayer = playerhelpers->GetGamePlayer(pEdict);
-	if(!pPlayer)
+	if(!pPlayer || !pPlayer->GetEdict())
 		return DETOUR_MEMBER_CALL(DETOUR_SwingOrStab)(bStab);
 
 	IPlayerInfo *pInfo = pPlayer->GetPlayerInfo();
