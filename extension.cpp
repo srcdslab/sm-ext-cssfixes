@@ -149,6 +149,30 @@ static struct SrcdsPatch
 		NULL,
 		0, 0, 0, false
 	},
+	// 5: disable alive check in point_viewcontrol->Disable
+	{
+		"_ZN14CTriggerCamera7DisableEv",
+		(unsigned char *)"\x8B\x10\x89\x04\x24\xFF\x92\x08\x01\x00\x00\x84\xC0\x0F\x84\x58\xFF\xFF\xFF",
+		"xxxxxxx??xxxxxx?xxx",
+		(unsigned char *)"\x8B\x10\x89\x04\x24\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
+		0, 0, 0, false
+	},
+	// 6: disable player->m_takedamage = DAMAGE_NO in point_viewcontrol->Enable
+	{
+		"_ZN14CTriggerCamera6EnableEv",
+		(unsigned char *)"\x31\xFF\x80\xBF\xFD\x00\x00\x00\x00\x0F\x85\x96\x03\x00\x00",
+		"xxxx?xxxxxx??xx",
+		(unsigned char *)"\x31\xFF\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
+		0, 0, 0, false
+	},
+	// 7: disable player->m_takedamage = m_nOldTakeDamage in point_viewcontrol->Disable
+	{
+		"_ZN14CTriggerCamera7DisableEv",
+		(unsigned char *)"\x89\xF9\x38\x8E\xFD\x00\x00\x00\x0F\x84\xAC\xFD\xFF\xFF",
+		"xxxx?xxxxxxxxx",
+		(unsigned char *)"\x89\xF9\x38\x8E\xFD\x00\x00\x00\x90\xE9\xAC\xFD\xFF\xFF",
+		0, 0, 0, false
+	}
 };
 
 class CBaseEntity;
