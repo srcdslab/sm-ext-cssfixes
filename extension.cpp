@@ -324,23 +324,35 @@ bool ShouldHitEntity(IHandleEntity *pHandleEntity, int contentsMask)
 	CBaseHandle hndl = pUnk->GetRefEHandle();
 	int index = hndl.GetEntryIndex();
 
+	int iTeam = 0;
+
 	if(index > SM_MAXPLAYERS && g_pPhysboxToClientMap && index < 2048)
 	{
 		index = g_pPhysboxToClientMap[index];
 	}
 
-	if(index < 1 || index > SM_MAXPLAYERS)
+	if(index >= -3 && index <= -1)
+	{
+		iTeam = -index;
+	}
+	else if(index < 1 || index > SM_MAXPLAYERS)
+	{
 		RETURN_META_VALUE(MRES_IGNORED, true);
+	}
 
-	IGamePlayer *pPlayer = playerhelpers->GetGamePlayer(index);
-	if(!pPlayer || !pPlayer->GetEdict())
-		RETURN_META_VALUE(MRES_IGNORED, true);
+	if(!iTeam)
+	{
+		IGamePlayer *pPlayer = playerhelpers->GetGamePlayer(index);
+		if(!pPlayer || !pPlayer->GetEdict())
+			RETURN_META_VALUE(MRES_IGNORED, true);
 
-	IPlayerInfo *pInfo = pPlayer->GetPlayerInfo();
-	if(!pInfo)
-		RETURN_META_VALUE(MRES_IGNORED, true);
+		IPlayerInfo *pInfo = pPlayer->GetPlayerInfo();
+		if(!pInfo)
+			RETURN_META_VALUE(MRES_IGNORED, true);
 
-	int iTeam = pInfo->GetTeamIndex();
+		iTeam = pInfo->GetTeamIndex();
+	}
+
 	if(iTeam == g_FireBulletPlayerTeam)
 		RETURN_META_VALUE(MRES_SUPERCEDE, false);
 
