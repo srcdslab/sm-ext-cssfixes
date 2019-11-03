@@ -172,6 +172,14 @@ static struct SrcdsPatch
 		"xxxx?xxxxxxxxx",
 		(unsigned char *)"\x89\xF9\x38\x8E\xFD\x00\x00\x00\x90\xE9\xAC\xFD\xFF\xFF",
 		0, 0, 0, false
+	},
+	// 8: userinfo stringtable don't write fakeclient field
+	{
+		"_ZN11CBaseClient12FillUserInfoER13player_info_s",
+		(unsigned char *)"\xFF\x50\x70\x88\x46\x6C",
+		"xxxxxx",
+		(unsigned char *)"\x90\x90\x90\x90\x90\x90",
+		0, 0, 0, true
 	}
 };
 
