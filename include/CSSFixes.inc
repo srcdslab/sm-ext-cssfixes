@@ -8,23 +8,17 @@ forward void OnPrePlayerThinkFunctions();
 forward void OnPostPlayerThinkFunctions();
 forward void OnRunThinkFunctionsPost(bool simulating);
 
-// -1 = Ignore, normal operation.
-// 0 = Block ALL SV_TriggerMoved.
-// >0 = Entity index for which to allow EnumElement to be called.
-// REMEMBER TO CALL THIS AGAIN WITH -1 AFTER USING IT !!!
-native void FilterTriggerMoved(int entity);
+// Block TriggerMoved from being called at all for an entity by setting the bit to 1.
+native void BlockTriggerMoved(int map[2048 / 32], bool set);
 
-// -1 = Ignore, normal operation.
-// 0 = Block ALL SV_SolidMoved.
-// >0 = Entity index for which to allow SV_SolidMoved to be called.
-// REMEMBER TO CALL THIS AGAIN WITH -1 AFTER USING IT !!!
-native void BlockSolidMoved(int entity);
+// Block SolidMoved from being called at all for an entity by setting the bit to 1.
+native void BlockSolidMoved(int map[2048 / 32], bool set);
 
-// Block clients SolidMoved from touching an entity by setting it to 1 in the clients map.
-native void FilterClientEntityMap(char map[MAXPLAYERS + 1][2048], bool set);
+// Block clients SolidMoved from touching an entity by setting the bit to 1 in the clients map.
+native void FilterClientEntityMap(int map[((MAXPLAYERS + 1) * 2048) / 32], bool set);
 
-// Block triggers TriggerMoved from touching any client by setting it to 1 for the entity index.
-native void FilterTriggerTouchPlayers(char map[2048], bool set);
+// Block triggers TriggerMoved from touching any client by setting the bit to 1 for the entity index.
+native void FilterTriggerTouchPlayers(int map[2048 / 32], bool set);
 
 // Map entities to client entity in FireBullets/SwingOrStab ShouldHitEntity.
 // Aka. shoot and knife through physboxes that are parented to teammates (white knight, gandalf, horse, etc.)

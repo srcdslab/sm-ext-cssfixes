@@ -38,6 +38,10 @@
 #include <server_class.h>
 #include <ispatialpartition.h>
 
+#define SetBit(A,I)		((A)[(I) >> 5] |= (1 << ((I) & 31)))
+#define ClearBit(A,I)	((A)[(I) >> 5] &= ~(1 << ((I) & 31)))
+#define CheckBit(A,I)	!!((A)[(I) >> 5] & (1 << ((I) & 31)))
+
 bool UTIL_ContainsDataTable(SendTable *pTable, const char *name)
 {
 	const char *pname = pTable->GetName();
@@ -520,21 +524,16 @@ void Physics_SimulateEntity_CustomLoop(CBaseEntity **ppList, int Count, float St
 }
 
 int g_TriggerEntityMoved;
-char *g_pFilterTriggerTouchPlayers = NULL;
-int g_FilterTriggerMoved = -1;
+int *g_pFilterTriggerTouchPlayers = NULL;
+int *g_pBlockTriggerMoved = NULL;
 // void IVEngineServer::TriggerMoved( edict_t *pTriggerEnt, bool testSurroundingBoundsOnly ) = 0;
 SH_DECL_HOOK2_void(IVEngineServer, TriggerMoved, SH_NOATTRIB, 0, edict_t *, bool);
 void TriggerMoved(edict_t *pTriggerEnt, bool testSurroundingBoundsOnly)
 {
 	g_TriggerEntityMoved = gamehelpers->IndexOfEdict(pTriggerEnt);
 
-	// Allow all
-	if(g_FilterTriggerMoved == -1)
-	{
-		RETURN_META(MRES_IGNORED);
-	}
-	// Block All
-	else if(g_FilterTriggerMoved == 0)
+	// Block if bit is set
+	if(g_pBlockTriggerMoved && CheckBit(g_pBlockTriggerMoved, g_TriggerEntityMoved))
 	{
 		RETURN_META(MRES_SUPERCEDE);
 	}
@@ -547,7 +546,7 @@ void TriggerMoved(edict_t *pTriggerEnt, bool testSurroundingBoundsOnly)
 SH_DECL_HOOK1(CTriggerMoved, EnumElement, SH_NOATTRIB, 0, IterationRetval_t, IHandleEntity *);
 IterationRetval_t TriggerMoved_EnumElement(IHandleEntity *pHandleEntity)
 {
-	if(g_FilterTriggerMoved <= 0 && !g_pFilterTriggerTouchPlayers)
+	if(!g_pFilterTriggerTouchPlayers)
 	{
 		RETURN_META_VALUE(MRES_IGNORED, ITERATION_CONTINUE);
 	}
@@ -562,14 +561,8 @@ IterationRetval_t TriggerMoved_EnumElement(IHandleEntity *pHandleEntity)
 		RETURN_META_VALUE(MRES_IGNORED, ITERATION_CONTINUE);
 	}
 
-	// block touching any clients here if map exists and evaluates to true
-	if(g_pFilterTriggerTouchPlayers && g_pFilterTriggerTouchPlayers[g_TriggerEntityMoved])
-	{
-		RETURN_META_VALUE(MRES_SUPERCEDE, ITERATION_CONTINUE);
-	}
-
-	// if filter is active block touch from all other players
-	if(g_FilterTriggerMoved > 0 && index != g_FilterTriggerMoved)
+	// block touching any clients here if bit is set
+	if(CheckBit(g_pFilterTriggerTouchPlayers, g_TriggerEntityMoved))
 	{
 		RETURN_META_VALUE(MRES_SUPERCEDE, ITERATION_CONTINUE);
 	}
@@ -578,16 +571,20 @@ IterationRetval_t TriggerMoved_EnumElement(IHandleEntity *pHandleEntity)
 	RETURN_META_VALUE(MRES_IGNORED, ITERATION_CONTINUE);
 }
 
-cell_t FilterTriggerMoved(IPluginContext *pContext, const cell_t *params)
+cell_t BlockTriggerMoved(IPluginContext *pContext, const cell_t *params)
 {
-	g_FilterTriggerMoved = params[1];
+	if(params[2])
+		pContext->LocalToPhysAddr(params[1], &g_pBlockTriggerMoved);
+	else
+		g_pBlockTriggerMoved = NULL;
+
 	return 0;
 }
 
 cell_t FilterTriggerTouchPlayers(IPluginContext *pContext, const cell_t *params)
 {
 	if(params[2])
-		pContext->LocalToPhysAddr(params[1], (cell_t **)&g_pFilterTriggerTouchPlayers);
+		pContext->LocalToPhysAddr(params[1], &g_pFilterTriggerTouchPlayers);
 	else
 		g_pFilterTriggerTouchPlayers = NULL;
 
@@ -595,32 +592,21 @@ cell_t FilterTriggerTouchPlayers(IPluginContext *pContext, const cell_t *params)
 }
 
 int g_SolidEntityMoved;
-int g_BlockSolidMoved = -1;
-char *g_pFilterClientEntityMap = NULL;
+int *g_pBlockSolidMoved = NULL;
+int *g_pFilterClientEntityMap = NULL;
 // void IVEngineServer::SolidMoved( edict_t *pSolidEnt, ICollideable *pSolidCollide, const Vector* pPrevAbsOrigin, bool testSurroundingBoundsOnly ) = 0;
 SH_DECL_HOOK4_void(IVEngineServer, SolidMoved, SH_NOATTRIB, 0, edict_t *, ICollideable *, const Vector *, bool);
 void SolidMoved(edict_t *pSolidEnt, ICollideable *pSolidCollide, const Vector *pPrevAbsOrigin, bool testSurroundingBoundsOnly)
 {
 	g_SolidEntityMoved = gamehelpers->IndexOfEdict(pSolidEnt);
 
-	// Allow all
-	if(g_BlockSolidMoved == -1)
-	{
-		RETURN_META(MRES_IGNORED);
-	}
-	// Block all
-	else if(g_BlockSolidMoved == 0)
+	// Block if bit is set
+	if(g_pBlockSolidMoved && CheckBit(g_pBlockSolidMoved, g_TriggerEntityMoved))
 	{
 		RETURN_META(MRES_SUPERCEDE);
 	}
 
-	// Block filtered entity
-	if(g_SolidEntityMoved == g_BlockSolidMoved)
-	{
-		RETURN_META(MRES_SUPERCEDE);
-	}
-
-	// Allow all others
+	// Decide per entity in TouchLinks_EnumElement
 	RETURN_META(MRES_IGNORED);
 }
 
@@ -650,12 +636,8 @@ IterationRetval_t TouchLinks_EnumElement(IHandleEntity *pHandleEntity)
 		RETURN_META_VALUE(MRES_IGNORED, ITERATION_CONTINUE);
 	}
 
-	// SourcePawn char map[MAXPLAYERS + 1][2048]
-	// Contiguous memory, shift array by client idx * 2048
-	int arrayIdx = g_SolidEntityMoved * 2048 + index;
-
 	// Block player from touching this entity if it's filtered
-	if(g_pFilterClientEntityMap[arrayIdx])
+	if(CheckBit(g_pFilterClientEntityMap, g_SolidEntityMoved * 2048 + index))
 	{
 		RETURN_META_VALUE(MRES_SUPERCEDE, ITERATION_CONTINUE);
 	}
@@ -666,14 +648,18 @@ IterationRetval_t TouchLinks_EnumElement(IHandleEntity *pHandleEntity)
 
 cell_t BlockSolidMoved(IPluginContext *pContext, const cell_t *params)
 {
-	g_BlockSolidMoved = params[1];
+	if(params[2])
+		pContext->LocalToPhysAddr(params[1], &g_pBlockSolidMoved);
+	else
+		g_pBlockSolidMoved = NULL;
+
 	return 0;
 }
 
 cell_t FilterClientEntityMap(IPluginContext *pContext, const cell_t *params)
 {
 	if(params[2])
-		pContext->LocalToPhysAddr(params[1], (cell_t **)&g_pFilterClientEntityMap);
+		pContext->LocalToPhysAddr(params[1], &g_pFilterClientEntityMap);
 	else
 		g_pFilterClientEntityMap = NULL;
 
@@ -945,7 +931,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 
 const sp_nativeinfo_t MyNatives[] =
 {
-	{ "FilterTriggerMoved", FilterTriggerMoved },
+	{ "BlockTriggerMoved", BlockTriggerMoved },
 	{ "BlockSolidMoved", BlockSolidMoved },
 	{ "FilterClientEntityMap", FilterClientEntityMap },
 	{ "FilterTriggerTouchPlayers", FilterTriggerTouchPlayers },
