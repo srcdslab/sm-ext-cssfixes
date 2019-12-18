@@ -52,12 +52,6 @@
 				"linux"		"@_ZN27CTraceFilterSkipTwoEntitiesC2EPK13IHandleEntityS2_i"
 			}
 
-			"Physics_RunThinkFunctions"
-			{
-				"library"	"server"
-				"linux"		"@_Z25Physics_RunThinkFunctionsb"
-			}
-
 			"CBaseEntity_KeyValue"
 			{
 				"library"	"server"
@@ -70,28 +64,10 @@
 				"linux"		"@_Z14FX_FireBulletsiRK6VectorRK6QAngleiiifff"
 			}
 
-			"Physics_SimulateEntity"
-			{
-				"library"	"server"
-				"linux"		"@_Z22Physics_SimulateEntityP11CBaseEntity"
-			}
-
 			"CKnife_SwingOrStab"
 			{
 				"library"	"server"
 				"linux"		"@_ZN6CKnife11SwingOrStabEb"
-			}
-
-			"CTriggerMoved"
-			{
-				"library"	"engine"
-				"linux"		"@_ZTV13CTriggerMoved"
-			}
-
-			"CTouchLinks"
-			{
-				"library"	"engine"
-				"linux"		"@_ZTV11CTouchLinks"
 			}
 		}
 	}
