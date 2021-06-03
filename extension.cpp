@@ -164,6 +164,22 @@ static struct SrcdsPatch
 		"xxxxxx",
 		(unsigned char *)"\x90\x90\x90\x90\x90\x90",
 		0, 0, 0, true
+	},
+	// 10: fix server lagging resulting from too many ConMsgs due to packet spam ("%s:corrupted packet %i at %i\n")
+	{
+		"_ZN8CNetChan19ProcessPacketHeaderEP11netpacket_s",
+		(unsigned char *)"\x89\x44\x24\x04\x89\x5C\x24\x0C\x89\x54\x24\x08\xE8\xE0\xAB\x22\x00",
+		"xxxxxxxxxxxxx????",
+		(unsigned char *)"\x89\x44\x24\x04\x89\x5C\x24\x0C\x89\x54\x24\x08\x90\x90\x90\x90\x90",
+		0, 0, 0, true
+	},
+	// 11: fix server lagging resulting from too many ConMsgs due to packet spam ("Invalid split packet length %i\n")
+	{
+		"_Z11NET_GetLongiP11netpacket_s",
+		(unsigned char *)"\x89\x44\x24\x04\xC7\x04\x24\x98\x64\x24\x00\xE8\xFE\x20\x22\x00\x89\xF8\x8B\x5D\xF4\x8B\x75\xF8\x8B\x7D\xFC",
+		"xxxx???????x????xxxxxxxxxxx",
+		(unsigned char *)"\x89\x44\x24\x04\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x89\xF8\x8B\x5D\xF4\x8B\x75\xF8\x8B\x7D\xFC",
+		0, 0, 0, true
 	}
 };
 
@@ -559,7 +575,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			return false;
 		}
 
-		pPatch->pPatchAddress = FindPattern(pPatch->pAddress, pPatch->pPatchSignature, pPatch->pPatchPattern, 1024);
+		pPatch->pPatchAddress = FindPattern(pPatch->pAddress, pPatch->pPatchSignature, pPatch->pPatchPattern, 0x1000);
 		if(!pPatch->pPatchAddress)
 		{
 			snprintf(error, maxlength, "Could not find patch signature for symbol: %s", pPatch->pSignature);
