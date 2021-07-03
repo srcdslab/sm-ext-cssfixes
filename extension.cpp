@@ -91,15 +91,26 @@ public:
 
 static struct SrcdsPatch
 {
-	const char *pSignature;
-	const unsigned char *pPatchSignature;
-	const char *pPatchPattern;
-	const unsigned char *pPatch;
+	const char *pSignature; // function symbol
+	const unsigned char *pPatchSignature; // original opcode signature | function symbol for functionCall = true
+	const char *pPatchPattern; // pattern = x/?, ? = ignore signature
+	const unsigned char *pPatch; // replace with bytes
+	const char *pLibrary; // library of function symbol pSignature
 
-	unsigned char *pOriginal;
-	uintptr_t pAddress;
-	uintptr_t pPatchAddress;
-	bool engine;
+	int range = 0x400; // search range: scan up to this many bytes for the signature
+	int occurrences = 1; // maximum(!) number of occurences to patch
+	bool functionCall = false; // true = FindFunctionCall (pPatchSignature = function symbol) | false = FindPattern
+	const char *pFunctionLibrary = ""; // library of function symbol pPatchSignature for functionCall = true
+
+	struct Restore
+	{
+		unsigned char *pOriginal = NULL;
+		uintptr_t pPatchAddress = 0;
+		struct Restore *pNext = NULL;
+	} *pRestore = NULL;
+
+	uintptr_t pAddress = 0;
+	uintptr_t pSignatureAddress = 0;
 } gs_Patches[] = {
 	// 0: game_ui should not apply FL_ONTRAIN flag, else client prediction turns off
 	{
@@ -107,23 +118,23 @@ static struct SrcdsPatch
 		(unsigned char *)"\xC7\x44\x24\x04\x10\x00\x00\x00\x89\x34\x24\xE8\x00\x00\x00\x00",
 		"xxxxxxxxxxxx????",
 		(unsigned char *)"\xC7\x44\x24\x04\x10\x00\x00\x00\x89\x34\x24\x90\x90\x90\x90\x90",
-		0, 0, 0, false
+		"cstrike/bin/server_srv.so"
 	},
 	// 1: player_speedmod should not turn off flashlight
 	{
 		"_ZN17CMovementSpeedMod13InputSpeedModER11inputdata_t",
-		(unsigned char *)"\xFF\x90\x8C\x05\x00\x00\x85\xC0\x0F\x85\x75\x02\x00\x00",
+		(unsigned char *)"\xFF\x90\x8C\x05\x00\x00\x85\xC0\x0F\x85\x85\x02\x00\x00",
 		"xxxxxxxxxxxxxx",
 		(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
-		0, 0, 0, false
+		"cstrike/bin/server_srv.so"
 	},
 	// 2: only select CT spawnpoints
 	{
 		"_ZN9CCSPlayer19EntSelectSpawnPointEv",
-		(unsigned char *)"\x89\x1C\x24\xE8\x00\x00\x00\x00\x83\xF8\x03\x74\x4B",
+		(unsigned char *)"\x89\x1C\x24\xE8\x00\x00\x00\x00\x83\xF8\x03\x74\x6B",
 		"xxxx????xxxxx",
-		(unsigned char *)"\x89\x1C\x24\x90\x90\x90\x90\x90\x90\x90\x90\xEB\x4B",
-		0, 0, 0, false
+		(unsigned char *)"\x89\x1C\x24\x90\x90\x90\x90\x90\x90\x90\x90\xEB\x6B",
+		"cstrike/bin/server_srv.so"
 	},
 	// 3: don't check if we have T spawns
 	{
@@ -131,7 +142,7 @@ static struct SrcdsPatch
 		(unsigned char *)"\x74\x0E\x8B\x83\x80\x02\x00\x00\x85\xC0\x0F\x85\x9E\x00\x00\x00\xC7\x04\x24\xAC\xF7\x87\x00\xE8\xC2\x82\x91\x00",
 		"xxxxxxxxxxxxxxxx????????????",
 		(unsigned char *)"\x0F\x85\xA8\x00\x00\x00\x8B\x83\x80\x02\x00\x00\x85\xC0\x0F\x85\x9A\x00\x00\x00\x90\x90\x90\x90\x90\x90\x90\x90",
-		0, 0, 0, false
+		"cstrike/bin/server_srv.so"
 	},
 	// 5: disable alive check in point_viewcontrol->Disable
 	{
@@ -139,23 +150,23 @@ static struct SrcdsPatch
 		(unsigned char *)"\x8B\x10\x89\x04\x24\xFF\x92\x08\x01\x00\x00\x84\xC0\x0F\x84\x58\xFF\xFF\xFF",
 		"xxxxxxx??xxxxxx?xxx",
 		(unsigned char *)"\x8B\x10\x89\x04\x24\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
-		0, 0, 0, false
+		"cstrike/bin/server_srv.so"
 	},
 	// 6: disable player->m_takedamage = DAMAGE_NO in point_viewcontrol->Enable
 	{
 		"_ZN14CTriggerCamera6EnableEv",
-		(unsigned char *)"\x31\xFF\x80\xBF\xFD\x00\x00\x00\x00\x0F\x85\x96\x03\x00\x00",
+		(unsigned char *)"\x31\xF6\x80\xBE\xFD\x00\x00\x00\x00\x0F\x85\x8D\x03\x00\x00",
 		"xxxx?xxxxxx??xx",
-		(unsigned char *)"\x31\xFF\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
-		0, 0, 0, false
+		(unsigned char *)"\x31\xF6\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
+		"cstrike/bin/server_srv.so"
 	},
 	// 7: disable player->m_takedamage = m_nOldTakeDamage in point_viewcontrol->Disable
 	{
 		"_ZN14CTriggerCamera7DisableEv",
-		(unsigned char *)"\x89\xF9\x38\x8E\xFD\x00\x00\x00\x0F\x84\xAC\xFD\xFF\xFF",
+		(unsigned char *)"\x89\xF9\x38\x8E\xFD\x00\x00\x00\x0F\x84\xCA\xFD\xFF\xFF",
 		"xxxx?xxxxxxxxx",
-		(unsigned char *)"\x89\xF9\x38\x8E\xFD\x00\x00\x00\x90\xE9\xAC\xFD\xFF\xFF",
-		0, 0, 0, false
+		(unsigned char *)"\x89\xF9\x38\x8E\xFD\x00\x00\x00\x90\xE9\xCA\xFD\xFF\xFF",
+		"cstrike/bin/server_srv.so"
 	},
 	// 8: userinfo stringtable don't write fakeclient field
 	{
@@ -163,24 +174,28 @@ static struct SrcdsPatch
 		(unsigned char *)"\xFF\x50\x70\x88\x46\x6C",
 		"xxxxxx",
 		(unsigned char *)"\x90\x90\x90\x90\x90\x90",
-		0, 0, 0, true
+		"bin/engine_srv.so"
 	},
-	// 10: fix server lagging resulting from too many ConMsgs due to packet spam ("%s:corrupted packet %i at %i\n")
+	// 9: fix server lagging resulting from too many ConMsgs due to packet spam
 	{
 		"_ZN8CNetChan19ProcessPacketHeaderEP11netpacket_s",
-		(unsigned char *)"\x89\x44\x24\x04\x89\x5C\x24\x0C\x89\x54\x24\x08\xE8\xE0\xAB\x22\x00",
-		"xxxxxxxxxxxxx????",
-		(unsigned char *)"\x89\x44\x24\x04\x89\x5C\x24\x0C\x89\x54\x24\x08\x90\x90\x90\x90\x90",
-		0, 0, 0, true
+		(unsigned char *)"_Z6ConMsgPKcz",
+		"xxxxx",
+		(unsigned char *)"\x90\x90\x90\x90\x90",
+		"bin/engine_srv.so",
+		0x7d1, 100,
+		true, "bin/libtier0_srv.so"
 	},
-	// 11: fix server lagging resulting from too many ConMsgs due to packet spam ("Invalid split packet length %i\n")
+	// 10: fix server lagging resulting from too many ConMsgs due to packet spam
 	{
 		"_Z11NET_GetLongiP11netpacket_s",
-		(unsigned char *)"\x89\x44\x24\x04\xC7\x04\x24\x98\x64\x24\x00\xE8\xFE\x20\x22\x00\x89\xF8\x8B\x5D\xF4\x8B\x75\xF8\x8B\x7D\xFC",
-		"xxxx???????x????xxxxxxxxxxx",
-		(unsigned char *)"\x89\x44\x24\x04\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x89\xF8\x8B\x5D\xF4\x8B\x75\xF8\x8B\x7D\xFC",
-		0, 0, 0, true
-	}
+		(unsigned char *)"Msg",
+		"xxxxx",
+		(unsigned char *)"\x90\x90\x90\x90\x90",
+		"bin/engine_srv.so",
+		0x800, 100,
+		true, "bin/libtier0_srv.so"
+	},
 };
 
 class CBaseEntity;
@@ -542,62 +557,91 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	g_SH_SkipTwoEntitiesShouldHitEntity = SH_ADD_DVPHOOK(CTraceFilterSkipTwoEntities, ShouldHitEntity, g_CTraceFilterSkipTwoEntities, SH_STATIC(ShouldHitEntity), true);
 	g_SH_SimpleShouldHitEntity = SH_ADD_DVPHOOK(CTraceFilterSimple, ShouldHitEntity, g_CTraceFilterSimple, SH_STATIC(ShouldHitEntity), true);
 
-	void *pServerSo = dlopen("cstrike/bin/server_srv.so", RTLD_NOW);
-	if(!pServerSo)
-	{
-		snprintf(error, maxlength, "Could not dlopen server_srv.so");
-		SDK_OnUnload();
-		return false;
-	}
-
-	void *pEngineSo = dlopen("bin/engine_srv.so", RTLD_NOW);
-	if(!pEngineSo)
-	{
-		snprintf(error, maxlength, "Could not dlopen engine_srv.so");
-		SDK_OnUnload();
-		return false;
-	}
-
 	// Apply all patches
 	for(size_t i = 0; i < sizeof(gs_Patches) / sizeof(*gs_Patches); i++)
 	{
 		struct SrcdsPatch *pPatch = &gs_Patches[i];
 		int PatchLen = strlen(pPatch->pPatchPattern);
 
-		void *pBinary = pPatch->engine ? pEngineSo : pServerSo;
+		void *pBinary = dlopen(pPatch->pLibrary, RTLD_NOW);
+		if(!pBinary)
+		{
+			snprintf(error, maxlength, "Could not dlopen %s", pPatch->pLibrary);
+			SDK_OnUnload();
+			return false;
+		}
+
 		pPatch->pAddress = (uintptr_t)memutils->ResolveSymbol(pBinary, pPatch->pSignature);
+		dlclose(pBinary);
 		if(!pPatch->pAddress)
 		{
-			snprintf(error, maxlength, "Could not find symbol: %s", pPatch->pSignature);
-			dlclose(pServerSo);
-			dlclose(pEngineSo);
+			snprintf(error, maxlength, "Could not find symbol: %s in %s (%p)",
+				pPatch->pSignature, pPatch->pLibrary, pBinary);
 			SDK_OnUnload();
 			return false;
 		}
 
-		pPatch->pPatchAddress = FindPattern(pPatch->pAddress, pPatch->pPatchSignature, pPatch->pPatchPattern, 0x1000);
-		if(!pPatch->pPatchAddress)
+		SrcdsPatch::Restore **ppRestore = &pPatch->pRestore;
+
+		if(pPatch->functionCall)
 		{
-			snprintf(error, maxlength, "Could not find patch signature for symbol: %s", pPatch->pSignature);
-			dlclose(pServerSo);
-			dlclose(pEngineSo);
-			SDK_OnUnload();
-			return false;
+			void *pFunctionBinary = dlopen(pPatch->pFunctionLibrary, RTLD_NOW);
+			if(!pFunctionBinary)
+			{
+				snprintf(error, maxlength, "Could not dlopen %s", pPatch->pFunctionLibrary);
+				SDK_OnUnload();
+				return false;
+			}
+
+			pPatch->pSignatureAddress = (uintptr_t)memutils->ResolveSymbol(pFunctionBinary, (char *)pPatch->pPatchSignature);
+			dlclose(pFunctionBinary);
+			if(!pPatch->pSignatureAddress)
+			{
+				snprintf(error, maxlength, "Could not find patch signature symbol: %s in %s (%p)",
+					(char *)pPatch->pPatchSignature, pPatch->pFunctionLibrary, pFunctionBinary);
+				SDK_OnUnload();
+				return false;
+			}
 		}
 
-		pPatch->pOriginal = (unsigned char *)malloc(PatchLen * sizeof(unsigned char));
-
-		SourceHook::SetMemAccess((void *)pPatch->pPatchAddress, PatchLen, SH_MEM_READ|SH_MEM_WRITE|SH_MEM_EXEC);
-		for(int j = 0; j < PatchLen; j++)
+		uintptr_t ofs = 0;
+		int found;
+		for(found = 0; found < pPatch->occurrences; found++)
 		{
-			pPatch->pOriginal[j] = *(unsigned char *)(pPatch->pPatchAddress + j);
-			*(unsigned char *)(pPatch->pPatchAddress + j) = pPatch->pPatch[j];
+			uintptr_t pPatchAddress;
+			if(pPatch->functionCall)
+				pPatchAddress = FindFunctionCall(pPatch->pAddress + ofs, pPatch->pSignatureAddress, pPatch->range - ofs);
+			else
+				pPatchAddress = FindPattern(pPatch->pAddress + ofs, pPatch->pPatchSignature, pPatch->pPatchPattern, pPatch->range - ofs);
+
+			if(!pPatchAddress)
+			{
+				if(found)
+					break;
+
+				snprintf(error, maxlength, "Could not find patch signature for symbol: %s", pPatch->pSignature);
+				SDK_OnUnload();
+				return false;
+			}
+			ofs = pPatchAddress - pPatch->pAddress + PatchLen;
+
+			// Create restore object
+			*ppRestore = (SrcdsPatch::Restore *)new SrcdsPatch::Restore();
+			SrcdsPatch::Restore *pRestore = *ppRestore;
+			pRestore->pPatchAddress = pPatchAddress;
+			pRestore->pOriginal = (unsigned char *)malloc(PatchLen * sizeof(unsigned char));
+
+			SourceHook::SetMemAccess((void *)pPatchAddress, PatchLen, SH_MEM_READ|SH_MEM_WRITE|SH_MEM_EXEC);
+			for(int j = 0; j < PatchLen; j++)
+			{
+				pRestore->pOriginal[j] = *(unsigned char *)(pPatchAddress + j);
+				*(unsigned char *)(pPatchAddress + j) = pPatch->pPatch[j];
+			}
+			SourceHook::SetMemAccess((void *)pPatchAddress, PatchLen, SH_MEM_READ|SH_MEM_EXEC);
+
+			ppRestore = &((*ppRestore)->pNext);
 		}
-		SourceHook::SetMemAccess((void *)pPatch->pPatchAddress, PatchLen, SH_MEM_READ|SH_MEM_EXEC);
 	}
-
-	dlclose(pServerSo);
-	dlclose(pEngineSo);
 
 	return true;
 }
@@ -672,18 +716,26 @@ void CSSFixes::SDK_OnUnload()
 		struct SrcdsPatch *pPatch = &gs_Patches[i];
 		int PatchLen = strlen(pPatch->pPatchPattern);
 
-		if(!pPatch->pOriginal)
-			continue;
-
-		SourceHook::SetMemAccess((void *)pPatch->pPatchAddress, PatchLen, SH_MEM_READ|SH_MEM_WRITE|SH_MEM_EXEC);
-		for(int j = 0; j < PatchLen; j++)
+		SrcdsPatch::Restore *pRestore = pPatch->pRestore;
+		while(pRestore)
 		{
-			*(unsigned char *)(pPatch->pPatchAddress + j) = pPatch->pOriginal[j];
-		}
-		SourceHook::SetMemAccess((void *)pPatch->pPatchAddress, PatchLen, SH_MEM_READ|SH_MEM_EXEC);
+			if(!pRestore->pOriginal)
+				break;
 
-		free(pPatch->pOriginal);
-		pPatch->pOriginal = NULL;
+			SourceHook::SetMemAccess((void *)pRestore->pPatchAddress, PatchLen, SH_MEM_READ|SH_MEM_WRITE|SH_MEM_EXEC);
+			for(int j = 0; j < PatchLen; j++)
+			{
+				*(unsigned char *)(pRestore->pPatchAddress + j) = pRestore->pOriginal[j];
+			}
+			SourceHook::SetMemAccess((void *)pRestore->pPatchAddress, PatchLen, SH_MEM_READ|SH_MEM_EXEC);
+
+			free(pRestore->pOriginal);
+			pRestore->pOriginal = NULL;
+
+			void *freeMe = pRestore;
+			pRestore = pRestore->pNext;
+			free(freeMe);
+		}
 	}
 }
 
