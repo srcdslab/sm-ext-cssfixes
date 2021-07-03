@@ -37,6 +37,8 @@
 #include <IEngineTrace.h>
 #include <server_class.h>
 #include <ispatialpartition.h>
+#include <utlvector.h>
+#include <string_t.h>
 
 #define SetBit(A,I)		((A)[(I) >> 5] |= (1 << ((I) & 31)))
 #define ClearBit(A,I)	((A)[(I) >> 5] &= ~(1 << ((I) & 31)))
@@ -72,6 +74,38 @@ bool UTIL_ContainsDataTable(SendTable *pTable, const char *name)
 	}
 
 	return false;
+}
+
+void UTIL_StringToVector( float *pVector, const char *pString )
+{
+	char *pstr, *pfront, tempString[128];
+	int	j;
+
+	Q_strncpy( tempString, pString, sizeof(tempString) );
+	pstr = pfront = tempString;
+
+	for ( j = 0; j < 3; j++ )			// lifted from pr_edict.c
+	{
+		pVector[j] = atof( pfront );
+
+		// skip any leading whitespace
+		while ( *pstr && *pstr <= ' ' )
+			pstr++;
+
+		// skip to next whitespace
+		while ( *pstr && *pstr > ' ' )
+			pstr++;
+
+		if (!*pstr)
+			break;
+
+		pstr++;
+		pfront = pstr;
+	}
+	for ( j++; j < 3; j++ )
+	{
+		pVector[j] = 0;
+	}
 }
 
 class CTraceFilterSimple : public CTraceFilter
@@ -204,6 +238,13 @@ struct variant_hax
 	const char *pszValue;
 };
 
+struct ResponseContext_t
+{
+	string_t m_iszName;
+	string_t m_iszValue;
+	float m_fExpirationTime;
+};
+
 struct inputdata_t
 {
 	// The entity that initially caused this chain of output events.
@@ -233,6 +274,8 @@ IGameConfig *g_pGameConf = NULL;
 
 CDetour *g_pDetour_InputTestActivator = NULL;
 CDetour *g_pDetour_PostConstructor = NULL;
+CDetour *g_pDetour_CreateEntityByName = NULL;
+CDetour *g_pDetour_PassesFilterImpl = NULL;
 CDetour *g_pDetour_FindUseEntity = NULL;
 CDetour *g_pDetour_CTraceFilterSimple = NULL;
 CDetour *g_pDetour_KeyValue = NULL;
@@ -240,6 +283,8 @@ CDetour *g_pDetour_FireBullets = NULL;
 CDetour *g_pDetour_SwingOrStab = NULL;
 int g_SH_SkipTwoEntitiesShouldHitEntity = 0;
 int g_SH_SimpleShouldHitEntity = 0;
+
+int g_iMaxPlayers = 0;
 
 uintptr_t g_CTraceFilterNoNPCsOrPlayer = 0;
 CTraceFilterSkipTwoEntities *g_CTraceFilterSkipTwoEntities = NULL;
@@ -274,12 +319,73 @@ DETOUR_DECL_MEMBER1(DETOUR_PostConstructor, void, const char *, szClassname)
 	DETOUR_MEMBER_CALL(DETOUR_PostConstructor)(szClassname);
 }
 
+// Implementation for custom filter entities
+DETOUR_DECL_MEMBER2(DETOUR_PassesFilterImpl, bool, CBaseEntity*, pCaller, CBaseEntity*, pEntity)
+{
+	CBaseEntity* pThisEnt = (CBaseEntity*)this;
+
+	// filter_activator_context: filters activators based on whether they have a given context with a nonzero value
+	// https://developer.valvesoftware.com/wiki/Filter_activator_context
+	// Implemented here because CUtlVectors are not supported in sourcepawn
+	if (!strcasecmp(gamehelpers->GetEntityClassname(pThisEnt), "filter_activator_context"))
+	{
+		static int m_ResponseContexts_offset = 0, m_iszResponseContext_offset = 0;
+
+		if (!m_ResponseContexts_offset && !m_iszResponseContext_offset)
+		{
+			datamap_t *pDataMap = gamehelpers->GetDataMap(pEntity);
+			sm_datatable_info_t info;
+			
+			// Both are CBaseEntity members, so the offsets will always be the same across different entity classes
+			gamehelpers->FindDataMapInfo(pDataMap, "m_ResponseContexts", &info);
+			m_ResponseContexts_offset = info.actual_offset;
+
+			gamehelpers->FindDataMapInfo(pDataMap, "m_iszResponseContext", &info);
+			m_iszResponseContext_offset = info.actual_offset;
+		}
+
+		CUtlVector<ResponseContext_t> vecResponseContexts;
+		vecResponseContexts = *(CUtlVector<ResponseContext_t>*)((uint8_t*)pEntity + m_ResponseContexts_offset);
+
+		const char *szFilterContext = (*(string_t*)((uint8_t*)pThisEnt + m_iszResponseContext_offset)).ToCStr();
+		const char *szContext;
+		int iContextValue;
+
+		for (int i = 0; i < vecResponseContexts.Count(); i++)
+		{
+			szContext = vecResponseContexts[i].m_iszName.ToCStr();
+			iContextValue = atoi(vecResponseContexts[i].m_iszValue.ToCStr());
+
+			if (!strcasecmp(szFilterContext, szContext) && iContextValue > 0)
+				return true;
+		}
+
+		return false;
+	}
+	
+	// CBaseFilter::PassesFilterImpl just returns true so no need to call it
+	return true;
+}
+
+// Switch new entity classnames to ones that can be instantiated while keeping the classname keyvalue intact so it can be used later
+DETOUR_DECL_STATIC2(DETOUR_CreateEntityByName, CBaseEntity*, const char*, className, int, iForceEdictIndex)
+{
+	// Nice of valve to expose CBaseFilter as filter_base :)
+	if (strcasecmp(className, "filter_activator_context") == 0)
+		className = "filter_base";
+
+	return DETOUR_STATIC_CALL(DETOUR_CreateEntityByName)(className, iForceEdictIndex);
+}
+
 DETOUR_DECL_MEMBER2(DETOUR_KeyValue, bool, const char *, szKeyName, const char *, szValue)
 {
+    CBaseEntity *pEntity = (CBaseEntity *)this;
+
 	// Fix crash bug in engine
 	if(strcasecmp(szKeyName, "angle") == 0)
+	{
 		szKeyName = "angles";
-
+	}
 	else if(strcasecmp(szKeyName, "classname") == 0 &&
 		strcasecmp(szValue, "info_player_terrorist") == 0)
 	{
@@ -288,13 +394,31 @@ DETOUR_DECL_MEMBER2(DETOUR_KeyValue, bool, const char *, szKeyName, const char *
 	}
 	else if(strcasecmp(szKeyName, "teamnum") == 0 || strcasecmp(szKeyName, "teamnum") == 0 )
 	{
-		CBaseEntity *pEntity = (CBaseEntity *)this;
 		const char *pClassname = gamehelpers->GetEntityClassname(pEntity);
 
 		// All buyzones should be CT buyzones
 		if(pClassname && strcasecmp(pClassname, "func_buyzone") == 0)
 			szValue = "3";
 	}
+    else if(strcasecmp(szKeyName, "absvelocity") == 0)
+    {
+        static int m_AbsVelocity_offset = 0;
+
+		if (!m_AbsVelocity_offset)
+		{
+			datamap_t *pDataMap = gamehelpers->GetDataMap(pEntity);
+			sm_datatable_info_t info;
+
+			gamehelpers->FindDataMapInfo(pDataMap, "m_vecAbsVelocity", &info);
+			m_AbsVelocity_offset = info.actual_offset;
+		}
+
+		float tmp[3];
+		UTIL_StringToVector(tmp, szValue);
+
+		Vector *vecAbsVelocity = (Vector*)((uint8_t*)pEntity + m_AbsVelocity_offset);
+		vecAbsVelocity->Init(tmp[0], tmp[1], tmp[2]);
+    }
 
 	return DETOUR_MEMBER_CALL(DETOUR_KeyValue)(szKeyName, szValue);
 }
@@ -338,7 +462,7 @@ bool ShouldHitEntity(IHandleEntity *pHandleEntity, int contentsMask)
 
 	int iTeam = 0;
 
-	if(index > SM_MAXPLAYERS && g_pPhysboxToClientMap && index < 2048)
+	if(index > g_iMaxPlayers && g_pPhysboxToClientMap && index < 2048)
 	{
 		index = g_pPhysboxToClientMap[index];
 	}
@@ -347,11 +471,12 @@ bool ShouldHitEntity(IHandleEntity *pHandleEntity, int contentsMask)
 	{
 		iTeam = -index;
 	}
-	else if(index < 1 || index > SM_MAXPLAYERS)
+	else if(index < 1 || index > g_iMaxPlayers)
 	{
 		RETURN_META_VALUE(MRES_IGNORED, true);
 	}
 
+	char lifeState = 0;
 	if(!iTeam)
 	{
 		IGamePlayer *pPlayer = playerhelpers->GetGamePlayer(index);
@@ -363,9 +488,21 @@ bool ShouldHitEntity(IHandleEntity *pHandleEntity, int contentsMask)
 			RETURN_META_VALUE(MRES_IGNORED, true);
 
 		iTeam = pInfo->GetTeamIndex();
+
+		static int offset = 0;
+		if(!offset)
+		{
+			sm_sendprop_info_t spi;
+			if (!gamehelpers->FindSendPropInfo("CBasePlayer", "m_lifeState", &spi))
+				RETURN_META_VALUE(MRES_IGNORED, true);
+
+			offset = spi.actual_offset;
+		}
+
+		lifeState = *(char *)((uint8_t *)pHandleEntity + offset);
 	}
 
-	if(iTeam == g_FireBulletPlayerTeam)
+	if(iTeam == g_FireBulletPlayerTeam || lifeState != 0)
 		RETURN_META_VALUE(MRES_SUPERCEDE, false);
 
 	RETURN_META_VALUE(MRES_IGNORED, true);
@@ -446,6 +583,8 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 {
 	srand((unsigned int)time(NULL));
 
+    g_iMaxPlayers = playerhelpers->GetMaxClients();
+
 	char conf_error[255] = "";
 	if(!gameconfs->LoadGameConfigFile("CSSFixes", &g_pGameConf, conf_error, sizeof(conf_error)))
 	{
@@ -469,6 +608,22 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	if(g_pDetour_PostConstructor == NULL)
 	{
 		snprintf(error, maxlength, "Could not create detour for CBaseEntity_PostConstructor");
+		SDK_OnUnload();
+		return false;
+	}
+
+	g_pDetour_CreateEntityByName = DETOUR_CREATE_STATIC(DETOUR_CreateEntityByName, "CreateEntityByName");
+	if (g_pDetour_CreateEntityByName == NULL)
+	{
+		snprintf(error, maxlength, "Could not create detour for CreateEntityByName");
+		SDK_OnUnload();
+		return false;
+	}
+
+	g_pDetour_PassesFilterImpl = DETOUR_CREATE_MEMBER(DETOUR_PassesFilterImpl, "CBaseFilter_PassesFilterImpl");
+	if (g_pDetour_PassesFilterImpl == NULL)
+	{
+		snprintf(error, maxlength, "Could not create detour for CBaseFilter_PassesFilterImpl");
 		SDK_OnUnload();
 		return false;
 	}
@@ -515,6 +670,8 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 
 	g_pDetour_InputTestActivator->EnableDetour();
 	g_pDetour_PostConstructor->EnableDetour();
+	g_pDetour_CreateEntityByName->EnableDetour();
+	g_pDetour_PassesFilterImpl->EnableDetour();
 	g_pDetour_FindUseEntity->EnableDetour();
 	g_pDetour_CTraceFilterSimple->EnableDetour();
 	g_pDetour_KeyValue->EnableDetour();
@@ -670,6 +827,18 @@ void CSSFixes::SDK_OnUnload()
 	{
 		g_pDetour_PostConstructor->Destroy();
 		g_pDetour_PostConstructor = NULL;
+	}
+
+	if (g_pDetour_CreateEntityByName != NULL)
+	{
+		g_pDetour_CreateEntityByName->Destroy();
+		g_pDetour_CreateEntityByName = NULL;
+	}
+
+	if (g_pDetour_PassesFilterImpl != NULL)
+	{
+		g_pDetour_PassesFilterImpl->Destroy();
+		g_pDetour_PassesFilterImpl = NULL;
 	}
 
 	if(g_pDetour_FindUseEntity != NULL)

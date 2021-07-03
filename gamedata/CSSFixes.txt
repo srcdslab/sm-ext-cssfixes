@@ -15,6 +15,18 @@
 				"library"	"server"
 				"linux"		"@_ZN11CBaseEntity15PostConstructorEPKc"
 			}
+			
+			"CBaseFilter_PassesFilterImpl"
+			{
+				"library"	"server"
+				"linux"		"@_ZN11CBaseFilter16PassesFilterImplEP11CBaseEntityS1_"
+			}
+
+			"CreateEntityByName"
+			{
+				"library"	"server"
+				"linux"		"@_Z18CreateEntityByNamePKci"
+			}
 
 			"CBasePlayer_FindUseEntity"
 			{
