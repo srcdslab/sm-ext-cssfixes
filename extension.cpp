@@ -616,10 +616,10 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
     g_iMaxPlayers = playerhelpers->GetMaxClients();
 
 	char conf_error[255] = "";
-	if(!gameconfs->LoadGameConfigFile("CSSFixes", &g_pGameConf, conf_error, sizeof(conf_error)))
+	if(!gameconfs->LoadGameConfigFile("CSSFixes.games", &g_pGameConf, conf_error, sizeof(conf_error)))
 	{
 		if(conf_error[0])
-			snprintf(error, maxlength, "Could not read CSSFixes.txt: %s", conf_error);
+			snprintf(error, maxlength, "Could not read CSSFixes.games.txt: %s", conf_error);
 
 		return false;
 	}
