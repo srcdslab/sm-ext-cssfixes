@@ -189,10 +189,11 @@ static struct SrcdsPatch
 	// 6: disable player->m_takedamage = DAMAGE_NO in point_viewcontrol->Enable
 	{
 		"_ZN14CTriggerCamera6EnableEv",
-		(unsigned char *)"\x31\xF6\x80\xBE\xFD\x00\x00\x00\x00\x0F\x85\x8D\x03\x00\x00",
-		"xxxx?xxxxxx??xx",
-		(unsigned char *)"\x31\xF6\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
-		"cstrike/bin/server_srv.so"
+		(unsigned char *)"\xC6\x86\x00\x00\x00\x00\x00\x8B\x83\x00\x00\x00\x00\xA8\x20",
+		"xx?????xx????xx",
+		(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x8B\x83\x00\x00\x00\x00\xA8\x20",
+		"cstrike/bin/server_srv.so",
+		0x600
 	},
 	// 7: disable player->m_takedamage = m_nOldTakeDamage in point_viewcontrol->Disable
 	{
@@ -299,21 +300,50 @@ DETOUR_DECL_MEMBER1(DETOUR_InputTestActivator, void, inputdata_t *, inputdata)
 	DETOUR_MEMBER_CALL(DETOUR_InputTestActivator)(inputdata);
 }
 
+const char *pszNonEdicts[] =
+{
+	"ambient_generic",
+	"game_score",
+	"game_text",
+	"game_ui",
+	"logic_auto",	// bruh
+	"phys_thruster",
+	"phys_keepupright",
+	"player_speedmod",
+	"player_weaponstrip",
+	"point_clientcommand",
+	"point_servercommand",
+	"point_teleport",
+};
+
 DETOUR_DECL_MEMBER1(DETOUR_PostConstructor, void, const char *, szClassname)
 {
+	CBaseEntity *pEntity = (CBaseEntity *)this;
+
+	static datamap_t *pMap = gamehelpers->GetDataMap(pEntity);
+	static typedescription_t *td = gamehelpers->FindInDataMap(pMap, "m_iEFlags");
+	static uint32 offset = td->fieldOffset[TD_OFFSET_NORMAL];
+
 	if(strncasecmp(szClassname, "info_player_", 12) == 0)
 	{
-		CBaseEntity *pEntity = (CBaseEntity *)this;
-
-		datamap_t *pMap = gamehelpers->GetDataMap(pEntity);
-		typedescription_t *td = gamehelpers->FindInDataMap(pMap, "m_iEFlags");
-
 		// Spawnpoints don't need edicts...
-		*(uint32 *)((intptr_t)pEntity + td->fieldOffset[TD_OFFSET_NORMAL]) |= (1<<9); // EFL_SERVER_ONLY
+		*(uint32 *)((intptr_t)pEntity + offset) |= (1<<9); // EFL_SERVER_ONLY
 
 		// Only CT spawnpoints
 		if(strcasecmp(szClassname, "info_player_terrorist") == 0)
 			szClassname = "info_player_counterterrorist";
+
+		DETOUR_MEMBER_CALL(DETOUR_PostConstructor)(szClassname);
+		return;
+	}
+
+	// Remove edicts for a bunch of entities that REALLY don't need them
+	for (int i = 0; i < sizeof(pszNonEdicts)/sizeof(*pszNonEdicts); i++)
+	{
+		if (!strcasecmp(szClassname, pszNonEdicts[i]))
+		{
+			*(uint32 *)((intptr_t)pEntity + offset) |= (1<<9); // EFL_SERVER_ONLY
+		}
 	}
 
 	DETOUR_MEMBER_CALL(DETOUR_PostConstructor)(szClassname);
@@ -335,7 +365,7 @@ DETOUR_DECL_MEMBER2(DETOUR_PassesFilterImpl, bool, CBaseEntity*, pCaller, CBaseE
 		{
 			datamap_t *pDataMap = gamehelpers->GetDataMap(pEntity);
 			sm_datatable_info_t info;
-			
+
 			// Both are CBaseEntity members, so the offsets will always be the same across different entity classes
 			gamehelpers->FindDataMapInfo(pDataMap, "m_ResponseContexts", &info);
 			m_ResponseContexts_offset = info.actual_offset;
@@ -362,7 +392,7 @@ DETOUR_DECL_MEMBER2(DETOUR_PassesFilterImpl, bool, CBaseEntity*, pCaller, CBaseE
 
 		return false;
 	}
-	
+
 	// CBaseFilter::PassesFilterImpl just returns true so no need to call it
 	return true;
 }
