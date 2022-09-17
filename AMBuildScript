@@ -30,11 +30,6 @@ class SDK(object):
 WinOnly = ['windows']
 WinLinux = ['windows', 'linux']
 WinLinuxMac = ['windows', 'linux', 'mac']
-CSGO = {
-  'windows': ['x86'],
-  'linux': ['x86', 'x86_64'],
-  'mac': ['x86_64']
-}
 
 PossibleSDKs = {
   'css':  SDK('HL2SDKCSS', '2.css', '6', 'CSS', WinLinuxMac, 'css'),
