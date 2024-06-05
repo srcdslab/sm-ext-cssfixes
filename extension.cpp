@@ -231,6 +231,30 @@ static struct SrcdsPatch
 		0x800, 100,
 		true, "bin/libtier0_srv.so"
 	},
+	// 11: Always transmit point_viewcontrol (for debugging)
+	{
+		"_ZN14CTriggerCamera19UpdateTransmitStateEv",
+		(unsigned char *)"\x74\x16",
+		"xx",
+		(unsigned char *)"\xEB\x16",
+		"cstrike/bin/server_srv.so"
+	},
+	// 12: CTriggerCamera::FollowTarget: Don't early return when the player handle is null
+	{
+		"_ZN14CTriggerCamera12FollowTargetEv",
+		(unsigned char *)"\x74\x1B\x89\xD0\x25\x00\x00\x00\x00\xC1\xE0\x04",
+		"xxxxx????xxx",
+		(unsigned char *)"\xEB\x23\x89\xD0\x25\x00\x00\x00\x00\xC1\xE0\x04",
+		"cstrike/bin/server_srv.so"
+	},
+	// 13: CGameMovement::LadderMove NOP out player->SetGravity( 0 );
+	{
+		"_ZN13CGameMovement10LadderMoveEv",
+		(unsigned char *)"\xC7\x80\x78\x02\x00\x00\x00\x00\x00\x00",
+		"xxxxxxx???",
+		(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
+		"cstrike/bin/server_srv.so"
+	},
 };
 
 class CBaseEntity;
