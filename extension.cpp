@@ -433,7 +433,7 @@ DETOUR_DECL_STATIC2(DETOUR_CreateEntityByName, CBaseEntity*, const char*, classN
 
 DETOUR_DECL_MEMBER2(DETOUR_KeyValue, bool, const char *, szKeyName, const char *, szValue)
 {
-	CBaseEntity *pEntity = (CBaseEntity *)this;
+    CBaseEntity *pEntity = (CBaseEntity *)this;
 
 	// Fix crash bug in engine
 	if(strcasecmp(szKeyName, "angle") == 0)
@@ -454,9 +454,9 @@ DETOUR_DECL_MEMBER2(DETOUR_KeyValue, bool, const char *, szKeyName, const char *
 		if(pClassname && strcasecmp(pClassname, "func_buyzone") == 0)
 			szValue = "3";
 	}
-	else if(strcasecmp(szKeyName, "absvelocity") == 0)
-	{
-		static int m_AbsVelocity_offset = 0;
+    else if(strcasecmp(szKeyName, "absvelocity") == 0)
+    {
+        static int m_AbsVelocity_offset = 0;
 
 		if (!m_AbsVelocity_offset)
 		{
@@ -472,7 +472,7 @@ DETOUR_DECL_MEMBER2(DETOUR_KeyValue, bool, const char *, szKeyName, const char *
 
 		Vector *vecAbsVelocity = (Vector*)((uint8_t*)pEntity + m_AbsVelocity_offset);
 		vecAbsVelocity->Init(tmp[0], tmp[1], tmp[2]);
-	}
+    }
 
 	return DETOUR_MEMBER_CALL(DETOUR_KeyValue)(szKeyName, szValue);
 }
@@ -489,9 +489,6 @@ DETOUR_DECL_MEMBER0(DETOUR_FindUseEntity, CBaseEntity *)
 }
 DETOUR_DECL_MEMBER3(DETOUR_CTraceFilterSimple, void, const IHandleEntity *, passedict, int, collisionGroup, ShouldHitFunc_t, pExtraShouldHitFunc)
 {
-	if (passedict == nullptr || pExtraShouldHitFunc == nullptr)
-		return;
-
 	DETOUR_MEMBER_CALL(DETOUR_CTraceFilterSimple)(passedict, collisionGroup, pExtraShouldHitFunc);
 
 	// If we're in FindUseEntity right now then switch out the VTable
@@ -640,7 +637,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 {
 	srand((unsigned int)time(NULL));
 
-	g_iMaxPlayers = playerhelpers->GetMaxClients();
+    g_iMaxPlayers = playerhelpers->GetMaxClients();
 
 	char conf_error[255] = "";
 	if(!gameconfs->LoadGameConfigFile("CSSFixes.games", &g_pGameConf, conf_error, sizeof(conf_error)))
