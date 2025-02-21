@@ -71,9 +71,6 @@ jobs:
           python ../configure.py --enable-optimize --targets=${{ matrix.target-archs }} --sdks="${{ matrix.sdks }}"
           ambuild
 
-      - name: Debug - List files
-        run: ls -R extension/build
-
       - name: Prepare artifact structure
         run: |
           # linux-x86_64
