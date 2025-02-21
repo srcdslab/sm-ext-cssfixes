@@ -40,6 +40,9 @@
 #include <utlvector.h>
 #include <string_t.h>
 
+#define VPROF_ENABLED
+#include <tier0/vprof.h>
+
 #define SetBit(A,I)		((A)[(I) >> 5] |= (1 << ((I) & 31)))
 #define ClearBit(A,I)	((A)[(I) >> 5] &= ~(1 << ((I) & 31)))
 #define CheckBit(A,I)	!!((A)[(I) >> 5] & (1 << ((I) & 31)))
@@ -149,69 +152,77 @@ static struct SrcdsPatch
 	// 0: game_ui should not apply FL_ONTRAIN flag, else client prediction turns off
 	{
 		"_ZN7CGameUI5ThinkEv",
-		(unsigned char *)"\xC7\x44\x24\x04\x10\x00\x00\x00\x89\x34\x24\xE8\x00\x00\x00\x00",
-		"xxxxxxxxxxxx????",
-		(unsigned char *)"\xC7\x44\x24\x04\x10\x00\x00\x00\x89\x34\x24\x90\x90\x90\x90\x90",
+		(unsigned char *)"\x0F\x82\xC4\x03\x00\x00\x83\xEC\x08\x6A\x10\x53\xE8\x91\x00\xF5\xFF",
+		"xx????xx?x?xx????",
+		(unsigned char *)"\x0F\x82\xC4\x03\x00\x00\x83\xEC\x08\x6A\x10\x53\x90\x90\x90\x90\x90",
 		"cstrike/bin/server_srv.so"
 	},
 	// 1: player_speedmod should not turn off flashlight
 	{
 		"_ZN17CMovementSpeedMod13InputSpeedModER11inputdata_t",
-		(unsigned char *)"\xFF\x90\x8C\x05\x00\x00\x85\xC0\x0F\x85\x85\x02\x00\x00",
-		"xxxxxxxxxxxxxx",
-		(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
+		(unsigned char *)"\x8B\x90\xA4\x05\x00\x00\x81\xFA\x10\x6E\x3E\x00\x0F\x85\xC7\x02\x00\x00\x8B\x80\xA0\x05\x00\x00\x3D\x00\x6E\x3E\x00\x0F\x85\xEE\x02\x00\x00",
+		"xx????xx????xx????xx????x????xx????",
+		(unsigned char *)"\x8B\x90\xA4\x05\x00\x00\x81\xFA\x10\x6E\x3E\x00\x0F\x84\xC7\x02\x00\x00\x8B\x80\xA0\x05\x00\x00\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
 		"cstrike/bin/server_srv.so"
 	},
 	// 2: only select CT spawnpoints
 	{
 		"_ZN9CCSPlayer19EntSelectSpawnPointEv",
-		(unsigned char *)"\x89\x1C\x24\xE8\x00\x00\x00\x00\x83\xF8\x03\x74\x6B",
-		"xxxx????xxxxx",
-		(unsigned char *)"\x89\x1C\x24\x90\x90\x90\x90\x90\x90\x90\x90\xEB\x6B",
+		(unsigned char *)"\x74\x57\x83\xEC\x0C\x53\xE8\x6E\x34\xCA\xFF\x83\xC4\x10\x83\xF8\x02\x0F\x84",
+		"x?xx?xx????xx?xx?xx",
+		(unsigned char *)"\xEB\x57\x83\xEC\x0C\x53\xE8\x6E\x34\xCA\xFF\x83\xC4\x10\x83\xF8\x02\x0F\x84",
 		"cstrike/bin/server_srv.so"
 	},
 	// 3: don't check if we have T spawns
 	{
 		"_ZN12CCSGameRules18NeededPlayersCheckERb",
-		(unsigned char *)"\x74\x0E\x8B\x83\x80\x02\x00\x00\x85\xC0\x0F\x85\x9E\x00\x00\x00\xC7\x04\x24\xAC\xF7\x87\x00\xE8\xC2\x82\x91\x00",
-		"xxxxxxxxxxxxxxxx????????????",
-		(unsigned char *)"\x0F\x85\xA8\x00\x00\x00\x8B\x83\x80\x02\x00\x00\x85\xC0\x0F\x85\x9A\x00\x00\x00\x90\x90\x90\x90\x90\x90\x90\x90",
+		(unsigned char *)"\x74\x0A\x8B\x83\x94\x02\x00\x00\x85\xC0\x75\x4A\x83\xEC\x0C\x68\xE8\xCF\x93\x00\xE8\xA9\x46\x52\x00\x5A\x59",
+		"xxxx????xxx?xx?x????x????xx",
+		(unsigned char *)"\x75\x54\x8B\x83\x94\x02\x00\x00\x85\xC0\x75\x4A\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
 		"cstrike/bin/server_srv.so"
 	},
 	// 5: disable alive check in point_viewcontrol->Disable
 	{
 		"_ZN14CTriggerCamera7DisableEv",
-		(unsigned char *)"\x8B\x10\x89\x04\x24\xFF\x92\x08\x01\x00\x00\x84\xC0\x0F\x84\x58\xFF\xFF\xFF",
-		"xxxxxxx??xxxxxx?xxx",
-		(unsigned char *)"\x8B\x10\x89\x04\x24\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
+		(unsigned char *)"\x0F\x84\x47\x02\x00\x00\xF6\x83\x40\x01\x00\x00\x20\x0F\x85",
+		"xx????xx?????xx",
+		(unsigned char *)"\x90\x90\x90\x90\x90\x90\xF6\x83\x40\x01\x00\x00\x20\x0F\x85",
 		"cstrike/bin/server_srv.so"
 	},
 	// 6: disable player->m_takedamage = DAMAGE_NO in point_viewcontrol->Enable
 	{
 		"_ZN14CTriggerCamera6EnableEv",
-		(unsigned char *)"\xC6\x86\x00\x00\x00\x00\x00\x8B\x83\x00\x00\x00\x00\xA8\x20",
-		"xx?????xx????xx",
-		(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x8B\x83\x00\x00\x00\x00\xA8\x20",
+		(unsigned char *)"\xC6\x80\xFD\x00\x00\x00\x00\x8B\x83",
+		"xxxxxxxxx",
+		(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x8B\x83",
 		"cstrike/bin/server_srv.so",
 		0x600
 	},
 	// 7: disable player->m_takedamage = m_nOldTakeDamage in point_viewcontrol->Disable
 	{
 		"_ZN14CTriggerCamera7DisableEv",
-		(unsigned char *)"\x89\xF9\x38\x8E\xFD\x00\x00\x00\x0F\x84\xCA\xFD\xFF\xFF",
-		"xxxx?xxxxxxxxx",
-		(unsigned char *)"\x89\xF9\x38\x8E\xFD\x00\x00\x00\x90\xE9\xCA\xFD\xFF\xFF",
+		(unsigned char *)"\x74\x1A\x8B\x16\x8B\x92\x04\x02\x00\x00\x81\xFA\x30\xF9\x29\x00\x0F\x85",
+		"x?xxxx????xx????xx",
+		(unsigned char *)"\xEB\x1A\x8B\x16\x8B\x92\x04\x02\x00\x00\x81\xFA\x30\xF9\x29\x00\x0F\x85",
 		"cstrike/bin/server_srv.so"
 	},
 	// 8: userinfo stringtable don't write fakeclient field
 	{
 		"_ZN11CBaseClient12FillUserInfoER13player_info_s",
-		(unsigned char *)"\xFF\x50\x70\x88\x46\x6C",
-		"xxxxxx",
-		(unsigned char *)"\x90\x90\x90\x90\x90\x90",
+		(unsigned char *)"\x88\x46\x6C",
+		"xxx",
+		(unsigned char *)"\x90\x90\x90",
 		"bin/engine_srv.so"
 	},
-	// 9: fix server lagging resulting from too many ConMsgs due to packet spam
+	// 9: dont reset cash to 16000 when buying an item
+	{
+		"_ZN9CCSPlayer10AddAccountEibbPKc",
+		(unsigned char *)"\x3D\x80\x3E\x00\x00\x0F\x8F\x00\x00\x00\x00\x8D\x65",
+		"x????xx????xx",
+		(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x8D\x65",
+		"cstrike/bin/server_srv.so"
+	},
+	// 10: fix server lagging resulting from too many ConMsgs due to packet spam
 	{
 		"_ZN8CNetChan19ProcessPacketHeaderEP11netpacket_s",
 		(unsigned char *)"_Z6ConMsgPKcz",
@@ -221,7 +232,7 @@ static struct SrcdsPatch
 		0x7d1, 100,
 		true, "bin/libtier0_srv.so"
 	},
-	// 10: fix server lagging resulting from too many ConMsgs due to packet spam
+	// 11: fix server lagging resulting from too many ConMsgs due to packet spam
 	{
 		"_Z11NET_GetLongiP11netpacket_s",
 		(unsigned char *)"Msg",
@@ -231,7 +242,8 @@ static struct SrcdsPatch
 		0x800, 100,
 		true, "bin/libtier0_srv.so"
 	},
-	// 11: Always transmit point_viewcontrol (for debugging)
+	// 12: Always transmit point_viewcontrol (for debugging)
+	/*
 	{
 		"_ZN14CTriggerCamera19UpdateTransmitStateEv",
 		(unsigned char *)"\x74\x16",
@@ -239,20 +251,22 @@ static struct SrcdsPatch
 		(unsigned char *)"\xEB\x16",
 		"cstrike/bin/server_srv.so"
 	},
-	// 12: CTriggerCamera::FollowTarget: Don't early return when the player handle is null
+	*/
+	// 13: CTriggerCamera::FollowTarget: Don't early return when the player handle is null
 	{
 		"_ZN14CTriggerCamera12FollowTargetEv",
-		(unsigned char *)"\x74\x1B\x89\xD0\x25\x00\x00\x00\x00\xC1\xE0\x04",
-		"xxxxx????xxx",
-		(unsigned char *)"\xEB\x23\x89\xD0\x25\x00\x00\x00\x00\xC1\xE0\x04",
+		(unsigned char *)"\x0F\x84\xD6\x02\x00\x00\x83\xFA\xFF",
+		"xxxxxxxxx",
+		(unsigned char *)"\x90\x90\x90\x90\x90\x90\x83\xFA\xFF",
 		"cstrike/bin/server_srv.so"
 	},
-	// 13: CGameMovement::LadderMove NOP out player->SetGravity( 0 );
+	// 14: CGameMovement::LadderMove NOP out player->SetGravity( 0 );
+	// This is in a cloned function which has a weird symbol (_ZN13CGameMovement10LadderMoveEv_part_0) so I went with the function right before it
 	{
-		"_ZN13CGameMovement10LadderMoveEv",
-		(unsigned char *)"\xC7\x80\x78\x02\x00\x00\x00\x00\x00\x00",
-		"xxxxxxx???",
-		(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
+		"_ZN13CGameMovement12CheckFallingEv",
+		(unsigned char *)"\xC7\x80\xA4\x02\x00\x00\x00\x00\x00\x00\x8B\x03\x8B\x80",
+		"xx????????xxxx",
+		(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x8B\x03\x8B\x80",
 		"cstrike/bin/server_srv.so"
 	},
 };
@@ -326,7 +340,6 @@ DETOUR_DECL_MEMBER1(DETOUR_InputTestActivator, void, inputdata_t *, inputdata)
 
 const char *pszNonEdicts[] =
 {
-	"ambient_generic",
 	"game_score",
 	"game_text",
 	"game_ui",
@@ -342,6 +355,8 @@ const char *pszNonEdicts[] =
 
 DETOUR_DECL_MEMBER1(DETOUR_PostConstructor, void, const char *, szClassname)
 {
+	VPROF_ENTER_SCOPE("CSSFixes::DETOUR_PostConstructor");
+
 	CBaseEntity *pEntity = (CBaseEntity *)this;
 
 	static datamap_t *pMap = gamehelpers->GetDataMap(pEntity);
@@ -371,6 +386,8 @@ DETOUR_DECL_MEMBER1(DETOUR_PostConstructor, void, const char *, szClassname)
 	}
 
 	DETOUR_MEMBER_CALL(DETOUR_PostConstructor)(szClassname);
+
+	VPROF_EXIT_SCOPE();
 }
 
 // Implementation for custom filter entities
@@ -424,15 +441,23 @@ DETOUR_DECL_MEMBER2(DETOUR_PassesFilterImpl, bool, CBaseEntity*, pCaller, CBaseE
 // Switch new entity classnames to ones that can be instantiated while keeping the classname keyvalue intact so it can be used later
 DETOUR_DECL_STATIC2(DETOUR_CreateEntityByName, CBaseEntity*, const char*, className, int, iForceEdictIndex)
 {
+	VPROF_ENTER_SCOPE("CSSFixes::DETOUR_CreateEntityByName");
+
 	// Nice of valve to expose CBaseFilter as filter_base :)
 	if (strcasecmp(className, "filter_activator_context") == 0)
 		className = "filter_base";
 
-	return DETOUR_STATIC_CALL(DETOUR_CreateEntityByName)(className, iForceEdictIndex);
+	CBaseEntity *pEntity = DETOUR_STATIC_CALL(DETOUR_CreateEntityByName)(className, iForceEdictIndex);
+
+	VPROF_EXIT_SCOPE();
+
+	return pEntity;
 }
 
 DETOUR_DECL_MEMBER2(DETOUR_KeyValue, bool, const char *, szKeyName, const char *, szValue)
 {
+	VPROF_ENTER_SCOPE("CSSFixes::DETOUR_KeyValue");
+
 	CBaseEntity *pEntity = (CBaseEntity *)this;
 
 	// Fix crash bug in engine
@@ -474,7 +499,11 @@ DETOUR_DECL_MEMBER2(DETOUR_KeyValue, bool, const char *, szKeyName, const char *
 		vecAbsVelocity->Init(tmp[0], tmp[1], tmp[2]);
 	}
 
-	return DETOUR_MEMBER_CALL(DETOUR_KeyValue)(szKeyName, szValue);
+	bool bHandled = DETOUR_MEMBER_CALL(DETOUR_KeyValue)(szKeyName, szValue);
+
+	VPROF_EXIT_SCOPE();
+
+	return bHandled;
 }
 
 /* Ignore players in +USE trace */
@@ -492,7 +521,7 @@ DETOUR_DECL_MEMBER3(DETOUR_CTraceFilterSimple, void, const IHandleEntity *, pass
 	DETOUR_MEMBER_CALL(DETOUR_CTraceFilterSimple)(passedict, collisionGroup, pExtraShouldHitFunc);
 
 	// If we're in FindUseEntity right now then switch out the VTable
-	if(g_InFindUseEntity)
+	if (g_InFindUseEntity)
 		*(uintptr_t *)this = g_CTraceFilterNoNPCsOrPlayer;
 }
 
@@ -768,6 +797,8 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	g_SH_SkipTwoEntitiesShouldHitEntity = SH_ADD_DVPHOOK(CTraceFilterSkipTwoEntities, ShouldHitEntity, g_CTraceFilterSkipTwoEntities, SH_STATIC(ShouldHitEntity), true);
 	g_SH_SimpleShouldHitEntity = SH_ADD_DVPHOOK(CTraceFilterSimple, ShouldHitEntity, g_CTraceFilterSimple, SH_STATIC(ShouldHitEntity), true);
 
+	bool bSuccess = true;
+
 	// Apply all patches
 	for(size_t i = 0; i < sizeof(gs_Patches) / sizeof(*gs_Patches); i++)
 	{
@@ -777,19 +808,19 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		void *pBinary = dlopen(pPatch->pLibrary, RTLD_NOW);
 		if(!pBinary)
 		{
-			snprintf(error, maxlength, "Could not dlopen %s", pPatch->pLibrary);
-			SDK_OnUnload();
-			return false;
+			g_pSM->LogError(myself, "Could not dlopen %s", pPatch->pLibrary);
+			bSuccess = false;
+			continue;
 		}
 
 		pPatch->pAddress = (uintptr_t)memutils->ResolveSymbol(pBinary, pPatch->pSignature);
 		dlclose(pBinary);
 		if(!pPatch->pAddress)
 		{
-			snprintf(error, maxlength, "Could not find symbol: %s in %s (%p)",
+			g_pSM->LogError(myself, "Could not find symbol: %s in %s (%p)",
 				pPatch->pSignature, pPatch->pLibrary, pBinary);
-			SDK_OnUnload();
-			return false;
+			bSuccess = false;
+			continue;
 		}
 
 		SrcdsPatch::Restore **ppRestore = &pPatch->pRestore;
@@ -799,19 +830,19 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			void *pFunctionBinary = dlopen(pPatch->pFunctionLibrary, RTLD_NOW);
 			if(!pFunctionBinary)
 			{
-				snprintf(error, maxlength, "Could not dlopen %s", pPatch->pFunctionLibrary);
-				SDK_OnUnload();
-				return false;
+				g_pSM->LogError(myself, "Could not dlopen %s", pPatch->pFunctionLibrary);
+				bSuccess = false;
+				continue;
 			}
 
 			pPatch->pSignatureAddress = (uintptr_t)memutils->ResolveSymbol(pFunctionBinary, (char *)pPatch->pPatchSignature);
 			dlclose(pFunctionBinary);
 			if(!pPatch->pSignatureAddress)
 			{
-				snprintf(error, maxlength, "Could not find patch signature symbol: %s in %s (%p)",
+				g_pSM->LogError(myself, "Could not find patch signature symbol: %s in %s (%p)",
 					(char *)pPatch->pPatchSignature, pPatch->pFunctionLibrary, pFunctionBinary);
-				SDK_OnUnload();
-				return false;
+				bSuccess = false;
+				continue;
 			}
 		}
 
@@ -830,9 +861,9 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 				if(found)
 					break;
 
-				snprintf(error, maxlength, "Could not find patch signature for symbol: %s", pPatch->pSignature);
-				SDK_OnUnload();
-				return false;
+				g_pSM->LogError(myself, "Could not find patch signature for symbol: %s", pPatch->pSignature);
+				bSuccess = false;
+				continue;
 			}
 			ofs = pPatchAddress - pPatch->pAddress + PatchLen;
 
@@ -852,6 +883,12 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 
 			ppRestore = &((*ppRestore)->pNext);
 		}
+	}
+
+	if (!bSuccess)
+	{
+		SDK_OnUnload();
+		return false;
 	}
 
 	return true;

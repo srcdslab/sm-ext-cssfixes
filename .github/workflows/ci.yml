@@ -10,7 +10,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-20.04]
-        sourcemod-version: [1.11-dev]
+        sourcemod-version: [master]
         include:
           - os: ubuntu-20.04
             target-archs: x86,x86_64
@@ -24,15 +24,16 @@ jobs:
           sudo apt install -yq --no-install-recommends g++-multilib
 
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
 
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
+          submodules: recursive
           path: extension
 
       - name: Checkout SourceMod
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           repository: alliedmodders/sourcemod
           ref: ${{ matrix.sourcemod-version }}
@@ -40,20 +41,20 @@ jobs:
           submodules: recursive
 
       - name: Checkout AMBuild
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           repository: alliedmodders/ambuild
           path: ambuild
 
       - name: Checkout sm-ext-common
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           repository: srcdslab/sm-ext-common
           path: sourcemod/extensions/sm-ext-common
 
       - name: Install sourcemod dependencies
         run: |
-          bash sourcemod/tools/checkout-deps.sh -m -s ${{ matrix.sdks }}
+          bash sourcemod/tools/checkout-deps.sh -m -s "${{ matrix.sdks }}"
 
       - name: Install AMBuild
         uses: BSFishy/pip-action@v1
@@ -67,15 +68,29 @@ jobs:
           BREAKPAD_SYMBOL_SERVER: ${{ secrets.BREAKPAD_SYMBOL_SERVER }}
         run: |
           mkdir build && cd build
-          python ../configure.py --enable-optimize --targets=${{ matrix.target-archs }} --sdks=${{ matrix.sdks }}
+          python ../configure.py --enable-optimize --targets=${{ matrix.target-archs }} --sdks="${{ matrix.sdks }}"
           ambuild
 
+      - name: Debug - List files
+        run: ls -R extension/build
+
+      - name: Prepare artifact structure
+        run: |
+          # linux-x86_64
+          mkdir -p artifact/linux-x86_64/addons/sourcemod/extensions
+          cp -r extension/addons/sourcemod/* artifact/linux-x86_64/addons/sourcemod/
+          cp extension/build/CSSFixes.ext.2.css/linux-x86_64/CSSFixes.ext.2.css.so artifact/linux-x86_64/addons/sourcemod/extensions/
+          # linux-x86
+          mkdir -p artifact/linux-x86/addons/sourcemod/extensions
+          cp -r extension/addons/sourcemod/* artifact/linux-x86/addons/sourcemod/
+          cp extension/build/CSSFixes.ext.2.css/linux-x86/CSSFixes.ext.2.css.so artifact/linux-x86/addons/sourcemod/extensions/
+      
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ runner.os }}
-          path: extension/build/package
-
+          name: CSSFixes
+          path: artifact/**
+          if-no-files-found: error
 
   release:
     name: Release
@@ -85,22 +100,22 @@ jobs:
 
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4
 
       - name: Package
         run: |
           version=`echo $GITHUB_REF | sed "s/refs\/tags\///"`
           if [ -d "./Linux/" ]; then
             cd ./Linux/
-            tar -czf ../${{ github.event.repository.name }}-${version}-linux.tar.gz -T <(\ls -1)
+            tar -czf ../${{ github.event.repository.name }}-${version}-linux.tar.gz -T <(\ls -)
           fi
           if [ -d "./macOS/" ]; then
             cd ./macOS/
-            tar -czf ../${{ github.event.repository.name }}-${version}-mac.tar.gz -T <(\ls -1)
+            tar -czf ../${{ github.event.repository.name }}-${version}-mac.tar.gz -T <(\ls -)
           fi
           if [ -d "./Windows/" ]; then
             cd ./Windows/
-            tar -czf ../${{ github.event.repository.name }}-${version}-windows.tar.gz -T <(\ls -1)
+            tar -czf ../${{ github.event.repository.name }}-${version}-windows.tar.gz -T <(\ls -)
           fi
 
       - name: Release

@@ -1,44 +1,36 @@
 # vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
 import os
 
+if not "SM" in globals():
+  SM = Extension
+
 projectName = 'CSSFixes'
 
-for cxx in builder.targets:
-  for sdk_name in SM.sdks:
-    sdk = SM.sdks[sdk_name]
+project = builder.LibraryProject(projectName)
+project.sources += [
+  'extension.cpp',
+  os.path.join(SM.sm_root, 'public', 'smsdk_ext.cpp')
+]
 
-    if not cxx.target.arch in sdk.platformSpec[cxx.target.platform]:
+for sdk_name in SM.sdks:
+  sdk = SM.sdks[sdk_name]
+  if sdk['name'] in ['mock']:
+    continue
+
+  for cxx in builder.targets:
+    cxx.defines += ['HAVE_STRING_H'];
+    if not cxx.target.arch in sdk['platforms'][cxx.target.platform]:
       continue
 
-    binary = SM.HL2Library(builder, cxx, projectName + '.ext.' + sdk.ext, sdk)
+    binary = Extension.HL2ExtConfig(project, builder, cxx, projectName + '.ext.' + sdk['extension'], sdk)
+	
+    SM.AddCDetour(binary)
+	
+    binary.compiler.cxxflags += [
+      '-Wno-dangling-else',
+      '-Wno-unknown-pragmas',
+      '-Wno-unused-result',
+      '-Wno-sign-compare',
+	]
 
-    binary.compiler.defines += [
-      'HAVE_STRING_H',
-    ]
-
-    if cxx.target.platform == 'linux':
-      cxx.postlink += ['-lpthread', '-lrt']
-    elif cxx.target.platform == 'mac':
-      cxx.cflags += ['-Wno-deprecated-declarations']
-      cxx.postlink += ['-framework', 'CoreServices']
-
-    if cxx.family == 'gcc' or cxx.family == 'clang':
-      cxx.cxxflags += ['-fno-rtti']
-    elif cxx.family == 'msvc':
-      cxx.cxxflags += ['/GR-']
-
-    binary.sources += [
-      'extension.cpp',
-      os.path.join(SM.sm_root, 'extensions', 'sm-ext-common', 'mathstubs.c'),
-      os.path.join(SM.sm_root, 'public', 'smsdk_ext.cpp'),
-      os.path.join(SM.sm_root, 'public', 'CDetour', 'detours.cpp'),
-      os.path.join(SM.sm_root, 'public', 'asm', 'asm.c'),
-      os.path.join(SM.sm_root, 'public', 'libudis86', 'decode.c'),
-      os.path.join(SM.sm_root, 'public', 'libudis86', 'itab.c'),
-      os.path.join(SM.sm_root, 'public', 'libudis86', 'syn-att.c'),
-      os.path.join(SM.sm_root, 'public', 'libudis86', 'syn-intel.c'),
-      os.path.join(SM.sm_root, 'public', 'libudis86', 'syn.c'),
-      os.path.join(SM.sm_root, 'public', 'libudis86', 'udis86.c'),
-    ]
-
-    SM.extensions += [builder.Add(binary)]
+SM.extensions += builder.Add(project)

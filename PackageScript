@@ -1,57 +1,27 @@
-# vim: set ts=8 sts=2 sw=2 tw=99 et ft=python:
-import os
+# vim: set sts=2 ts=8 sw=2 tw=99 et:
+import sys
+from ambuild2 import run
 
-# This is where the files will be output to
-# package is the default
-builder.SetBuildFolder('package')
+# Simple extensions do not need to modify this file.
 
-# Add any folders you need to this list
-folder_list = [
-  'addons/sourcemod/extensions',
-  'addons/sourcemod/scripting/include',
-  'addons/sourcemod/gamedata'
-]
+parser = run.BuildParser(sourcePath=sys.path[0], api='2.2')
+parser.options.add_argument('--hl2sdk-root', type=str, dest='hl2sdk_root', default=None,
+                       help='Root search folder for HL2SDKs')
+parser.options.add_argument('--hl2sdk-manifest-path', type=str, dest='hl2sdk_manifest', default=None,
+                       help='Path to HL2SDK Manifests')
+parser.options.add_argument('--sm-path', type=str, dest='sm_path', default=None,
+                       help='Path to SourceMod')
+parser.options.add_argument('--mms-path', type=str, dest='mms_path', default=None,
+                       help='Path to Metamod:Source')
 
-if 'x86_64' in SM.target_archs:
-  folder_list.extend([
-    'addons/sourcemod/extensions/x64',
-  ])
+parser.options.add_argument('--enable-debug', action='store_const', const='1', dest='debug',
+                       help='Enable debugging symbols')
+parser.options.add_argument('--enable-optimize', action='store_const', const='1', dest='opt',
+                       help='Enable optimization')
+parser.options.add_argument('-s', '--sdks', default='present', dest='sdks',
+                       help='Build against specified SDKs; valid args are "none", "all", "present",'
+                            ' or comma-delimited list of engine names')
+parser.options.add_argument('--targets', type=str, dest='targets', default=None,
+                          help="Override the target architecture (use commas to separate multiple targets).")
+parser.Configure()
 
-# Create the distribution folder hierarchy.
-folder_map = {}
-for folder in folder_list:
-  norm_folder = os.path.normpath(folder)
-  folder_map[folder] = builder.AddFolder(norm_folder)
-
-# Copy binaries.
-for cxx_task in SM.extensions:
-  if cxx_task.target.arch == 'x86_64':
-    builder.AddCopy(cxx_task.binary, folder_map['addons/sourcemod/extensions/x64'])
-  else:
-    builder.AddCopy(cxx_task.binary, folder_map['addons/sourcemod/extensions'])
-
-# Do all straight-up file copies from the source tree.
-def CopyFiles(src, dest, files):
-  if not dest:
-    dest = src
-  dest_entry = folder_map[dest]
-  for source_file in files:
-    source_path = os.path.join(builder.sourcePath, src, source_file)
-    dest_path = os.path.join(dest_entry.path, source_file)
-    if not os.path.isfile(str(dest_path)):
-      builder.AddCopy(source_path, dest_entry)
-
-# Gamedata
-CopyFiles('addons/sourcemod/gamedata', 'addons/sourcemod/gamedata',
-  [ 'CSSFixes.games.txt' ]
-)
-
-# Include
-CopyFiles('addons/sourcemod/scripting/include', 'addons/sourcemod/scripting/include',
-  [ 'CSSFixes.inc' ]
-)
-
-# Autoload extension
-CopyFiles('addons/sourcemod/extensions', 'addons/sourcemod/extensions',
-  [ 'CSSFixes.autoload' ]
-)
