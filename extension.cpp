@@ -269,6 +269,14 @@ static struct SrcdsPatch
 		(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x8B\x03\x8B\x80",
 		"cstrike/bin/server_srv.so"
 	},
+	// 18: Remove weird filename handle check in CZipPackFile::GetFileInfo that broke loading mixed case files in bsp pakfiles
+	{
+		"_ZN12CZipPackFile11GetFileInfoEPKcRiRxS2_S2_Rt",
+		(unsigned char *)"\x75\x00\x8B\x09",
+		"x?xx",
+		(unsigned char *)"\x90\x90\x8B\x09",
+		"bin/dedicated_srv.so"
+	},
 };
 
 class CBaseEntity;
