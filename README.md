@@ -32,3 +32,13 @@ void CMovementSpeedMod::InputSpeedMod(inputdata_t &data)
 ```
 
 **NOP**'d out the block.
+
+# Configuration
+In cstrike/cfg/server.cfg add this
+```
+//============================================================================
+// Late load support - since multiples things need to be init before load it
+// The upcoming extensions can not use autoload file
+
+sm exts load CSSFixes
+```
