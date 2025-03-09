@@ -1,0 +1,3 @@
+[submodule "sm-ext-common"]
+	path = sm-ext-common
+	url = https://github.com/srcdslab/sm-ext-common.git
