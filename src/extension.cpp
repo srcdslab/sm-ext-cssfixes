@@ -1,32 +1,32 @@
 /**
-* vim: set ts=4 :
-* =============================================================================
-* SourceMod Sample Extension
-* Copyright (C) 2004-2008 AlliedModders LLC.  All rights reserved.
-* =============================================================================
-*
-* This program is free software; you can redistribute it and/or modify it under
-* the terms of the GNU General Public License, version 3.0, as published by the
-* Free Software Foundation.
-*
-* This program is distributed in the hope that it will be useful, but WITHOUT
-* ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-* FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
-* details.
-*
-* You should have received a copy of the GNU General Public License along with
-* this program.  If not, see <http://www.gnu.org/licenses/>.
-*
-* As a special exception, AlliedModders LLC gives you permission to link the
-* code of this program (as well as its derivative works) to "Half-Life 2," the
-* "Source Engine," the "SourcePawn JIT," and any Game MODs that run on software
-* by the Valve Corporation.  You must obey the GNU General Public License in
-* all respects for all other code used.  Additionally, AlliedModders LLC grants
-* this exception to all derivative works.  AlliedModders LLC defines further
-* exceptions, found in LICENSE.txt (as of this writing, version JULY-31-2007),
-* or <http://www.sourcemod.net/license.php>.
-*
-* Version: $Id$
+ * vim: set ts=4 :
+ * =============================================================================
+ * SourceMod Sample Extension
+ * Copyright (C) 2004-2008 AlliedModders LLC.  All rights reserved.
+ * =============================================================================
+ *
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License, version 3.0, as published by the
+ * Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * As a special exception, AlliedModders LLC gives you permission to link the
+ * code of this program (as well as its derivative works) to "Half-Life 2," the
+ * "Source Engine," the "SourcePawn JIT," and any Game MODs that run on software
+ * by the Valve Corporation.  You must obey the GNU General Public License in
+ * all respects for all other code used.  Additionally, AlliedModders LLC grants
+ * this exception to all derivative works.  AlliedModders LLC defines further
+ * exceptions, found in LICENSE.txt (as of this writing, version JULY-31-2007),
+ * or <http://www.sourcemod.net/license.php>.
+ *
+ * Version: $Id$
 */
 
 #include "extension.h"
@@ -160,9 +160,9 @@ static struct SrcdsPatch
 	// 1: player_speedmod should not turn off flashlight
 	{
 		"_ZN17CMovementSpeedMod13InputSpeedModER11inputdata_t",
-		(unsigned char *)"\x8B\x90\xA4\x05\x00\x00\x81\xFA\x10\x6E\x3E\x00\x0F\x85\xC7\x02\x00\x00\x8B\x80\xA0\x05\x00\x00\x3D\x00\x6E\x3E\x00\x0F\x85\xEE\x02\x00\x00",
-		"xx????xx????xx????xx????x????xx????",
-		(unsigned char *)"\x8B\x90\xA4\x05\x00\x00\x81\xFA\x10\x6E\x3E\x00\x0F\x84\xC7\x02\x00\x00\x8B\x80\xA0\x05\x00\x00\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
+		(unsigned char *)"\x0F\x85\x00\x00\x00\x00\x83\xEC\x0C\x57\xE8\x1D\xFF\xFF\xFF\x83\xC4\x10\x09\x83",
+		"xx????xx?xx????xx?xx",
+		(unsigned char *)"\x90\x90\x90\x90\x90\x90\x83\xEC\x0C\x57\xE8\x1D\xFF\xFF\xFF\x83\xC4\x10\x09\x83",
 		"cstrike/bin/server_srv.so"
 	},
 	// 2: only select CT spawnpoints
@@ -269,6 +269,55 @@ static struct SrcdsPatch
 		(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x8B\x03\x8B\x80",
 		"cstrike/bin/server_srv.so"
 	},
+	// 15: I CUtlLinkedList<T,S,ML,I,M>::AllocInternal( bool multilist )
+	//skip CUtlLinkedList overflow! (exhausted memory allocator) and CUtlLinkedList overflow! (exhausted index range)
+	//this avoids crashing when loading over 64k strings into stringpool. Custom assets in maps lead towards the limit. jenz- December 2023
+	// \x90 prevent green,
+	// \xEB prevent red
+	/*
+	{
+		"_ZN14CUtlLinkedListI16CUtlKeyValuePairI19CUtlConstStringBaseIcE7empty_tEtLb0Et10CUtlMemoryI19UtlLinkedListElem_tIS4_tEtEE13AllocInternalEb",
+		(unsigned char *)"\x74\x0C",
+		"xx",
+		(unsigned char *)"\x90\x90",
+		"bin/dedicated_srv.so"
+	},
+	{
+		"_ZN12CZipPackFile7PrepareExx",
+		(unsigned char *)"\x0F\x85\x32\x03\x00\x00",
+		"_ZN14CUtlLinkedListI16CUtlKeyValuePairI19CUtlConstStringBaseIcE7empty_tEtLb0Et10CUtlMemoryI19UtlLinkedListElem_tIS4_tEtEE13AllocInternalEb",
+		(unsigned char *)"\x0F\x87\x7A\xFF\xFF\xFF",
+		"xxxxxx",
+		(unsigned char *)"\xEB\x85\x32\x03\x00\x00" ,
+		(unsigned char *)"\xEB\x87\x7A\xFF\xFF\xFF",
+		"bin/dedicated_srv.so"
+	},
+	{
+		"_ZN14CUtlLinkedListI16CUtlKeyValuePairI19CUtlConstStringBaseIcE7empty_tEtLb0Et10CUtlMemoryI19UtlLinkedListElem_tIS4_tEtEE13AllocInternalEb",
+		(unsigned char *)"\x0F\x84\x9C\x00\x00\x00",
+		"xxxxxx",
+		(unsigned char *)"\x90\x90\x90\x90\x90\x90",
+		"bin/dedicated_srv.so"
+	},
+
+	*/
+	// 16: should allow people to run around freely after game end, by overwriting pPlayer->AddFlag( FL_FROZEN ); line 3337 in cs_gamerules.cpp
+	//this change is desired for the new mapvoting feature so that people can still freely move at the end of the map while the vote is running.
+	{
+		"_ZN12CCSGameRules16GoToIntermissionEv",
+		(unsigned char *)"\x74\x0E\x83\xEC\x08\x6A\x40\x50",
+		"xxxxxxxx",
+		(unsigned char *)"\xEB\x0E\x83\xEC\x08\x6A\x40\x50",
+		"cstrike/bin/server_srv.so"
+	},
+	//17 also jump over boolean = true // freeze players while in intermission		m_bFreezePeriod = true;
+	{
+		"_ZN12CCSGameRules16GoToIntermissionEv",
+		(unsigned char *)"\x75\x0F\xE8\x69\xCE\xDA\xFF\x8B\x45\x08",
+		"xxxxxxxxxx",
+		(unsigned char *)"\xEB\x0F\xE8\x69\xCE\xDA\xFF\x8B\x45\x08",
+		"cstrike/bin/server_srv.so"
+	},
 	// 18: Remove weird filename handle check in CZipPackFile::GetFileInfo that broke loading mixed case files in bsp pakfiles
 	{
 		"_ZN12CZipPackFile11GetFileInfoEPKcRiRxS2_S2_Rt",
@@ -276,7 +325,7 @@ static struct SrcdsPatch
 		"x?xx",
 		(unsigned char *)"\x90\x90\x8B\x09",
 		"bin/dedicated_srv.so"
-	},
+	}
 };
 
 class CBaseEntity;
@@ -309,9 +358,10 @@ typedef bool (*ShouldHitFunc_t)( IHandleEntity *pHandleEntity, int contentsMask 
 uintptr_t FindPattern(uintptr_t BaseAddr, const unsigned char *pData, const char *pPattern, size_t MaxSize);
 uintptr_t FindFunctionCall(uintptr_t BaseAddr, uintptr_t Function, size_t MaxSize);
 
+
 /**
-* @file extension.cpp
-* @brief Implement extension code here.
+ * @file extension.cpp
+ * @brief Implement extension code here.
 */
 
 CSSFixes g_Interface;
