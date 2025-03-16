@@ -48,7 +48,7 @@ ret name(p1type p1name, p2type p2name, p3type p3name, p4type p4name, p5type p5na
  * @brief Sample implementation of the SDK Extension.
  * Note: Uncomment one of the pre-defined virtual functions in order to use it.
  */
-class CSSFixes : public SDKExtension
+class CSSFixes : public SDKExtension, public IConCommandBaseAccessor
 {
 public:
 	/**
@@ -118,6 +118,9 @@ public:
 	 */
 	//virtual bool SDK_OnMetamodPauseChange(bool paused, char *error, size_t maxlength);
 #endif
+
+public:  // IConCommandBaseAccessor
+	virtual bool RegisterConCommandBase(ConCommandBase *pVar);
 };
 
 #endif // _INCLUDE_SOURCEMOD_EXTENSION_PROPER_H_

@@ -30,6 +30,7 @@
 */
 
 #include "extension.h"
+#include "convarhelper.h"
 #include "CDetour/detours.h"
 #include "iplayerinfo.h"
 #include <sourcehook.h>
@@ -126,7 +127,7 @@ public:
 	virtual void SetPassEntity2( const IHandleEntity *pPassEntity2 ) = 0;
 };
 
-static struct SrcdsPatch
+struct SrcdsPatch
 {
 	const char *pSignature; // function symbol
 	const unsigned char *pPatchSignature; // original opcode signature | function symbol for functionCall = true
@@ -148,184 +149,6 @@ static struct SrcdsPatch
 
 	uintptr_t pAddress = 0;
 	uintptr_t pSignatureAddress = 0;
-} gs_Patches[] = {
-	// 0: game_ui should not apply FL_ONTRAIN flag, else client prediction turns off
-	{
-		"_ZN7CGameUI5ThinkEv",
-		(unsigned char *)"\x0F\x82\xC4\x03\x00\x00\x83\xEC\x08\x6A\x10\x53\xE8\x91\x00\xF5\xFF",
-		"xx????xx?x?xx????",
-		(unsigned char *)"\x0F\x82\xC4\x03\x00\x00\x83\xEC\x08\x6A\x10\x53\x90\x90\x90\x90\x90",
-		"cstrike/bin/server_srv.so"
-	},
-	// 1: player_speedmod should not turn off flashlight
-	{
-		"_ZN17CMovementSpeedMod13InputSpeedModER11inputdata_t",
-		(unsigned char *)"\x0F\x85\x00\x00\x00\x00\x83\xEC\x0C\x57\xE8\x1D\xFF\xFF\xFF\x83\xC4\x10\x09\x83",
-		"xx????xx?xx????xx?xx",
-		(unsigned char *)"\x90\x90\x90\x90\x90\x90\x83\xEC\x0C\x57\xE8\x1D\xFF\xFF\xFF\x83\xC4\x10\x09\x83",
-		"cstrike/bin/server_srv.so"
-	},
-	// 2: only select CT spawnpoints
-	{
-		"_ZN9CCSPlayer19EntSelectSpawnPointEv",
-		(unsigned char *)"\x74\x57\x83\xEC\x0C\x53\xE8\x6E\x34\xCA\xFF\x83\xC4\x10\x83\xF8\x02\x0F\x84",
-		"x?xx?xx????xx?xx?xx",
-		(unsigned char *)"\xEB\x57\x83\xEC\x0C\x53\xE8\x6E\x34\xCA\xFF\x83\xC4\x10\x83\xF8\x02\x0F\x84",
-		"cstrike/bin/server_srv.so"
-	},
-	// 3: don't check if we have T spawns
-	{
-		"_ZN12CCSGameRules18NeededPlayersCheckERb",
-		(unsigned char *)"\x74\x0A\x8B\x83\x94\x02\x00\x00\x85\xC0\x75\x4A\x83\xEC\x0C\x68\xE8\xCF\x93\x00\xE8\xA9\x46\x52\x00\x5A\x59",
-		"xxxx????xxx?xx?x????x????xx",
-		(unsigned char *)"\x75\x54\x8B\x83\x94\x02\x00\x00\x85\xC0\x75\x4A\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
-		"cstrike/bin/server_srv.so"
-	},
-	// 5: disable alive check in point_viewcontrol->Disable
-	{
-		"_ZN14CTriggerCamera7DisableEv",
-		(unsigned char *)"\x0F\x84\x47\x02\x00\x00\xF6\x83\x40\x01\x00\x00\x20\x0F\x85",
-		"xx????xx?????xx",
-		(unsigned char *)"\x90\x90\x90\x90\x90\x90\xF6\x83\x40\x01\x00\x00\x20\x0F\x85",
-		"cstrike/bin/server_srv.so"
-	},
-	// 6: disable player->m_takedamage = DAMAGE_NO in point_viewcontrol->Enable
-	{
-		"_ZN14CTriggerCamera6EnableEv",
-		(unsigned char *)"\xC6\x80\xFD\x00\x00\x00\x00\x8B\x83",
-		"xxxxxxxxx",
-		(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x8B\x83",
-		"cstrike/bin/server_srv.so",
-		0x600
-	},
-	// 7: disable player->m_takedamage = m_nOldTakeDamage in point_viewcontrol->Disable
-	{
-		"_ZN14CTriggerCamera7DisableEv",
-		(unsigned char *)"\x74\x1A\x8B\x16\x8B\x92\x04\x02\x00\x00\x81\xFA\x30\xF9\x29\x00\x0F\x85",
-		"x?xxxx????xx????xx",
-		(unsigned char *)"\xEB\x1A\x8B\x16\x8B\x92\x04\x02\x00\x00\x81\xFA\x30\xF9\x29\x00\x0F\x85",
-		"cstrike/bin/server_srv.so"
-	},
-	// 8: userinfo stringtable don't write fakeclient field
-	{
-		"_ZN11CBaseClient12FillUserInfoER13player_info_s",
-		(unsigned char *)"\x88\x46\x6C",
-		"xxx",
-		(unsigned char *)"\x90\x90\x90",
-		"bin/engine_srv.so"
-	},
-	// 9: dont reset cash to 16000 when buying an item
-	{
-		"_ZN9CCSPlayer10AddAccountEibbPKc",
-		(unsigned char *)"\x3D\x80\x3E\x00\x00\x0F\x8F\x00\x00\x00\x00\x8D\x65",
-		"x????xx????xx",
-		(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x8D\x65",
-		"cstrike/bin/server_srv.so"
-	},
-	// 10: fix server lagging resulting from too many ConMsgs due to packet spam
-	{
-		"_ZN8CNetChan19ProcessPacketHeaderEP11netpacket_s",
-		(unsigned char *)"_Z6ConMsgPKcz",
-		"xxxxx",
-		(unsigned char *)"\x90\x90\x90\x90\x90",
-		"bin/engine_srv.so",
-		0x7d1, 100,
-		true, "bin/libtier0_srv.so"
-	},
-	// 11: fix server lagging resulting from too many ConMsgs due to packet spam
-	{
-		"_Z11NET_GetLongiP11netpacket_s",
-		(unsigned char *)"Msg",
-		"xxxxx",
-		(unsigned char *)"\x90\x90\x90\x90\x90",
-		"bin/engine_srv.so",
-		0x800, 100,
-		true, "bin/libtier0_srv.so"
-	},
-	// 12: Always transmit point_viewcontrol (for debugging)
-	/*
-	{
-		"_ZN14CTriggerCamera19UpdateTransmitStateEv",
-		(unsigned char *)"\x74\x16",
-		"xx",
-		(unsigned char *)"\xEB\x16",
-		"cstrike/bin/server_srv.so"
-	},
-	*/
-	// 13: CTriggerCamera::FollowTarget: Don't early return when the player handle is null
-	{
-		"_ZN14CTriggerCamera12FollowTargetEv",
-		(unsigned char *)"\x0F\x84\xD6\x02\x00\x00\x83\xFA\xFF",
-		"xxxxxxxxx",
-		(unsigned char *)"\x90\x90\x90\x90\x90\x90\x83\xFA\xFF",
-		"cstrike/bin/server_srv.so"
-	},
-	// 14: CGameMovement::LadderMove NOP out player->SetGravity( 0 );
-	// This is in a cloned function which has a weird symbol (_ZN13CGameMovement10LadderMoveEv_part_0) so I went with the function right before it
-	{
-		"_ZN13CGameMovement12CheckFallingEv",
-		(unsigned char *)"\xC7\x80\xA4\x02\x00\x00\x00\x00\x00\x00\x8B\x03\x8B\x80",
-		"xx????????xxxx",
-		(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x8B\x03\x8B\x80",
-		"cstrike/bin/server_srv.so"
-	},
-	// 15: I CUtlLinkedList<T,S,ML,I,M>::AllocInternal( bool multilist )
-	//skip CUtlLinkedList overflow! (exhausted memory allocator) and CUtlLinkedList overflow! (exhausted index range)
-	//this avoids crashing when loading over 64k strings into stringpool. Custom assets in maps lead towards the limit. jenz- December 2023
-	// \x90 prevent green,
-	// \xEB prevent red
-	/*
-	{
-		"_ZN14CUtlLinkedListI16CUtlKeyValuePairI19CUtlConstStringBaseIcE7empty_tEtLb0Et10CUtlMemoryI19UtlLinkedListElem_tIS4_tEtEE13AllocInternalEb",
-		(unsigned char *)"\x74\x0C",
-		"xx",
-		(unsigned char *)"\x90\x90",
-		"bin/dedicated_srv.so"
-	},
-	{
-		"_ZN12CZipPackFile7PrepareExx",
-		(unsigned char *)"\x0F\x85\x32\x03\x00\x00",
-		"_ZN14CUtlLinkedListI16CUtlKeyValuePairI19CUtlConstStringBaseIcE7empty_tEtLb0Et10CUtlMemoryI19UtlLinkedListElem_tIS4_tEtEE13AllocInternalEb",
-		(unsigned char *)"\x0F\x87\x7A\xFF\xFF\xFF",
-		"xxxxxx",
-		(unsigned char *)"\xEB\x85\x32\x03\x00\x00" ,
-		(unsigned char *)"\xEB\x87\x7A\xFF\xFF\xFF",
-		"bin/dedicated_srv.so"
-	},
-	{
-		"_ZN14CUtlLinkedListI16CUtlKeyValuePairI19CUtlConstStringBaseIcE7empty_tEtLb0Et10CUtlMemoryI19UtlLinkedListElem_tIS4_tEtEE13AllocInternalEb",
-		(unsigned char *)"\x0F\x84\x9C\x00\x00\x00",
-		"xxxxxx",
-		(unsigned char *)"\x90\x90\x90\x90\x90\x90",
-		"bin/dedicated_srv.so"
-	},
-
-	*/
-	// 16: should allow people to run around freely after game end, by overwriting pPlayer->AddFlag( FL_FROZEN ); line 3337 in cs_gamerules.cpp
-	//this change is desired for the new mapvoting feature so that people can still freely move at the end of the map while the vote is running.
-	{
-		"_ZN12CCSGameRules16GoToIntermissionEv",
-		(unsigned char *)"\x74\x0E\x83\xEC\x08\x6A\x40\x50",
-		"xxxxxxxx",
-		(unsigned char *)"\xEB\x0E\x83\xEC\x08\x6A\x40\x50",
-		"cstrike/bin/server_srv.so"
-	},
-	//17 also jump over boolean = true // freeze players while in intermission		m_bFreezePeriod = true;
-	{
-		"_ZN12CCSGameRules16GoToIntermissionEv",
-		(unsigned char *)"\x75\x0F\xE8\x69\xCE\xDA\xFF\x8B\x45\x08",
-		"xxxxxxxxxx",
-		(unsigned char *)"\xEB\x0F\xE8\x69\xCE\xDA\xFF\x8B\x45\x08",
-		"cstrike/bin/server_srv.so"
-	},
-	// 18: Remove weird filename handle check in CZipPackFile::GetFileInfo that broke loading mixed case files in bsp pakfiles
-	{
-		"_ZN12CZipPackFile11GetFileInfoEPKcRiRxS2_S2_Rt",
-		(unsigned char *)"\x75\x00\x8B\x09",
-		"x?xx",
-		(unsigned char *)"\x90\x90\x8B\x09",
-		"bin/dedicated_srv.so"
-	}
 };
 
 class CBaseEntity;
@@ -366,6 +189,13 @@ uintptr_t FindFunctionCall(uintptr_t BaseAddr, uintptr_t Function, size_t MaxSiz
 
 CSSFixes g_Interface;
 SMEXT_LINK(&g_Interface);
+
+ConVar *g_SvForceCTSpawn = CreateConVar("sv_cssfixes_force_ct_spawnpoints", "1", FCVAR_NOTIFY, "Forces all spawnpoints to be on CT side");
+ConVar *g_SvSkipCashReset = CreateConVar("sv_cssfixes_skip_cash_reset", "1", FCVAR_NOTIFY, "Skip reset cash to 16000 when buying an item");
+ConVar *g_SvGameEndUnFreeze = CreateConVar("sv_cssfixes_gameend_unfreeze", "1", FCVAR_NOTIFY, "Allow people to run around freely after game end");
+ConVar *g_SvAlwaysTransmitPointViewControl = CreateConVar("sv_cssfixes_always_transmit_point_viewcontrol", "0", FCVAR_NOTIFY, "Always transmit point_viewcontrol for debugging purposes");
+
+std::vector<SrcdsPatch> gs_Patches = {};
 
 IGameConfig *g_pGameConf = NULL;
 
@@ -427,8 +257,11 @@ DETOUR_DECL_MEMBER1(DETOUR_PostConstructor, void, const char *, szClassname)
 		*(uint32 *)((intptr_t)pEntity + offset) |= (1<<9); // EFL_SERVER_ONLY
 
 		// Only CT spawnpoints
-		if(strcasecmp(szClassname, "info_player_terrorist") == 0)
+		if(g_SvForceCTSpawn->GetInt() && strcasecmp(szClassname, "info_player_terrorist") == 0)
+		{
+			g_pSM->LogMessage(myself, "Forcing CT spawn");
 			szClassname = "info_player_counterterrorist";
+		}
 
 		DETOUR_MEMBER_CALL(DETOUR_PostConstructor)(szClassname);
 		return;
@@ -523,15 +356,20 @@ DETOUR_DECL_MEMBER2(DETOUR_KeyValue, bool, const char *, szKeyName, const char *
 	{
 		szKeyName = "angles";
 	}
-	else if(strcasecmp(szKeyName, "classname") == 0 &&
+	else if(g_SvForceCTSpawn->GetInt() &&
+		strcasecmp(szKeyName, "classname") == 0 &&
 		strcasecmp(szValue, "info_player_terrorist") == 0)
 	{
+		g_pSM->LogMessage(myself, "Forcing CT spawn");
+
 		// Only CT spawnpoints
 		szValue = "info_player_counterterrorist";
 	}
-	else if(strcasecmp(szKeyName, "teamnum") == 0 || strcasecmp(szKeyName, "teamnum") == 0 )
+	else if(g_SvForceCTSpawn->GetInt() && (strcasecmp(szKeyName, "teamnum") == 0 || strcasecmp(szKeyName, "teamnum") == 0))
 	{
 		const char *pClassname = gamehelpers->GetEntityClassname(pEntity);
+
+		g_pSM->LogMessage(myself, "Forcing CT buyzone");
 
 		// All buyzones should be CT buyzones
 		if(pClassname && strcasecmp(pClassname, "func_buyzone") == 0)
@@ -722,6 +560,8 @@ cell_t PhysboxToClientMap(IPluginContext *pContext, const cell_t *params)
 
 bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 {
+	AutoExecConfig(g_pCVar, true);
+
 	srand((unsigned int)time(NULL));
 
 	g_iMaxPlayers = playerhelpers->GetMaxClients();
@@ -857,8 +697,172 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 
 	bool bSuccess = true;
 
+	gs_Patches = {
+		// 0: game_ui should not apply FL_ONTRAIN flag, else client prediction turns off
+		{
+			"_ZN7CGameUI5ThinkEv",
+			(unsigned char *)"\x0F\x82\xC4\x03\x00\x00\x83\xEC\x08\x6A\x10\x53\xE8\x91\x00\xF5\xFF",
+			"xx????xx?x?xx????",
+			(unsigned char *)"\x0F\x82\xC4\x03\x00\x00\x83\xEC\x08\x6A\x10\x53\x90\x90\x90\x90\x90",
+			"cstrike/bin/server_srv.so"
+		},
+		// 1: player_speedmod should not turn off flashlight
+		{
+			"_ZN17CMovementSpeedMod13InputSpeedModER11inputdata_t",
+			(unsigned char *)"\x0F\x85\x00\x00\x00\x00\x83\xEC\x0C\x57\xE8\x1D\xFF\xFF\xFF\x83\xC4\x10\x09\x83",
+			"xx????xx?xx????xx?xx",
+			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x83\xEC\x0C\x57\xE8\x1D\xFF\xFF\xFF\x83\xC4\x10\x09\x83",
+			"cstrike/bin/server_srv.so"
+		},
+		// 5: disable alive check in point_viewcontrol->Disable
+		{
+			"_ZN14CTriggerCamera7DisableEv",
+			(unsigned char *)"\x0F\x84\x47\x02\x00\x00\xF6\x83\x40\x01\x00\x00\x20\x0F\x85",
+			"xx????xx?????xx",
+			(unsigned char *)"\x90\x90\x90\x90\x90\x90\xF6\x83\x40\x01\x00\x00\x20\x0F\x85",
+			"cstrike/bin/server_srv.so"
+		},
+		// 6: disable player->m_takedamage = DAMAGE_NO in point_viewcontrol->Enable
+		{
+			"_ZN14CTriggerCamera6EnableEv",
+			(unsigned char *)"\xC6\x80\xFD\x00\x00\x00\x00\x8B\x83",
+			"xxxxxxxxx",
+			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x8B\x83",
+			"cstrike/bin/server_srv.so",
+			0x600
+		},
+		// 7: disable player->m_takedamage = m_nOldTakeDamage in point_viewcontrol->Disable
+		{
+			"_ZN14CTriggerCamera7DisableEv",
+			(unsigned char *)"\x74\x1A\x8B\x16\x8B\x92\x04\x02\x00\x00\x81\xFA\x30\xF9\x29\x00\x0F\x85",
+			"x?xxxx????xx????xx",
+			(unsigned char *)"\xEB\x1A\x8B\x16\x8B\x92\x04\x02\x00\x00\x81\xFA\x30\xF9\x29\x00\x0F\x85",
+			"cstrike/bin/server_srv.so"
+		},
+		// 8: userinfo stringtable don't write fakeclient field
+		{
+			"_ZN11CBaseClient12FillUserInfoER13player_info_s",
+			(unsigned char *)"\x88\x46\x6C",
+			"xxx",
+			(unsigned char *)"\x90\x90\x90",
+			"bin/engine_srv.so"
+		},
+		// 10: fix server lagging resulting from too many ConMsgs due to packet spam
+		{
+			"_ZN8CNetChan19ProcessPacketHeaderEP11netpacket_s",
+			(unsigned char *)"_Z6ConMsgPKcz",
+			"xxxxx",
+			(unsigned char *)"\x90\x90\x90\x90\x90",
+			"bin/engine_srv.so",
+			0x7d1, 100,
+			true, "bin/libtier0_srv.so"
+		},
+		// 11: fix server lagging resulting from too many ConMsgs due to packet spam
+		{
+			"_Z11NET_GetLongiP11netpacket_s",
+			(unsigned char *)"Msg",
+			"xxxxx",
+			(unsigned char *)"\x90\x90\x90\x90\x90",
+			"bin/engine_srv.so",
+			0x800, 100,
+			true, "bin/libtier0_srv.so"
+		},
+		// 13: CTriggerCamera::FollowTarget: Don't early return when the player handle is null
+		{
+			"_ZN14CTriggerCamera12FollowTargetEv",
+			(unsigned char *)"\x0F\x84\xD6\x02\x00\x00\x83\xFA\xFF",
+			"xxxxxxxxx",
+			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x83\xFA\xFF",
+			"cstrike/bin/server_srv.so"
+		},
+		// 14: CGameMovement::LadderMove NOP out player->SetGravity( 0 );
+		// This is in a cloned function which has a weird symbol (_ZN13CGameMovement10LadderMoveEv_part_0) so I went with the function right before it
+		{
+			"_ZN13CGameMovement12CheckFallingEv",
+			(unsigned char *)"\xC7\x80\xA4\x02\x00\x00\x00\x00\x00\x00\x8B\x03\x8B\x80",
+			"xx????????xxxx",
+			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x8B\x03\x8B\x80",
+			"cstrike/bin/server_srv.so"
+		},
+		// 18: Remove weird filename handle check in CZipPackFile::GetFileInfo that broke loading mixed case files in bsp pakfiles
+		{
+			"_ZN12CZipPackFile11GetFileInfoEPKcRiRxS2_S2_Rt",
+			(unsigned char *)"\x75\x00\x8B\x09",
+			"x?xx",
+			(unsigned char *)"\x90\x90\x8B\x09",
+			"bin/dedicated_srv.so"
+		}
+	};
+
+	if (g_SvForceCTSpawn->GetInt())
+	{
+		gs_Patches.push_back({
+			// 2: only select CT spawnpoints
+			"_ZN9CCSPlayer19EntSelectSpawnPointEv",
+			(unsigned char *)"\x74\x57\x83\xEC\x0C\x53\xE8\x6E\x34\xCA\xFF\x83\xC4\x10\x83\xF8\x02\x0F\x84",
+			"x?xx?xx????xx?xx?xx",
+			(unsigned char *)"\xEB\x57\x83\xEC\x0C\x53\xE8\x6E\x34\xCA\xFF\x83\xC4\x10\x83\xF8\x02\x0F\x84",
+			"cstrike/bin/server_srv.so"
+		});
+		gs_Patches.push_back({
+			// 3: don't check if we have T spawns
+			"_ZN12CCSGameRules18NeededPlayersCheckERb",
+			(unsigned char *)"\x74\x0A\x8B\x83\x94\x02\x00\x00\x85\xC0\x75\x4A\x83\xEC\x0C\x68\xE8\xCF\x93\x00\xE8\xA9\x46\x52\x00\x5A\x59",
+			"xxxx????xxx?xx?x????x????xx",
+			(unsigned char *)"\x75\x54\x8B\x83\x94\x02\x00\x00\x85\xC0\x75\x4A\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
+			"cstrike/bin/server_srv.so"
+		});
+
+		g_pSM->LogMessage(myself, "Forcing CT spawn");
+	}
+
+	if (g_SvSkipCashReset->GetInt())
+	{
+		gs_Patches.push_back({
+			// 9: dont reset cash to 16000 when buying an item
+			"_ZN9CCSPlayer10AddAccountEibbPKc",
+			(unsigned char *)"\x3D\x80\x3E\x00\x00\x0F\x8F\x00\x00\x00\x00\x8D\x65",
+			"x????xx????xx",
+			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x8D\x65",
+			"cstrike/bin/server_srv.so"
+		});
+	}
+
+	if (g_SvGameEndUnFreeze->GetInt())
+	{
+		gs_Patches.push_back({
+			// 16: allow people to run around freely after game end, by overwriting pPlayer->AddFlag( FL_FROZEN ); line 3337 in cs_gamerules.cpp
+			// this change is desired for the new mapvoting feature so that people can still freely move at the end of the map while the vote is running.
+			"_ZN12CCSGameRules16GoToIntermissionEv",
+			(unsigned char *)"\x74\x0E\x83\xEC\x08\x6A\x40\x50",
+			"xxxxxxxx",
+			(unsigned char *)"\xEB\x0E\x83\xEC\x08\x6A\x40\x50",
+			"cstrike/bin/server_srv.so"
+		});
+		gs_Patches.push_back({
+			//17 also jump over boolean = true // freeze players while in intermission		m_bFreezePeriod = true;
+			"_ZN12CCSGameRules16GoToIntermissionEv",
+			(unsigned char *)"\x75\x0F\xE8\x69\xCE\xDA\xFF\x8B\x45\x08",
+			"xxxxxxxxxx",
+			(unsigned char *)"\xEB\x0F\xE8\x69\xCE\xDA\xFF\x8B\x45\x08",
+			"cstrike/bin/server_srv.so"
+		});
+	}
+
+	if (g_SvAlwaysTransmitPointViewControl->GetInt())
+	{
+		gs_Patches.push_back({
+			// 12: Always transmit point_viewcontrol (for debugging)
+			"_ZN14CTriggerCamera19UpdateTransmitStateEv",
+			(unsigned char *)"\x74\x16",
+			"xx",
+			(unsigned char *)"\xEB\x16",
+			"cstrike/bin/server_srv.so"
+		});
+	}
+
 	// Apply all patches
-	for(size_t i = 0; i < sizeof(gs_Patches) / sizeof(*gs_Patches); i++)
+	for(size_t i = 0; i < gs_Patches.size(); i++)
 	{
 		struct SrcdsPatch *pPatch = &gs_Patches[i];
 		int PatchLen = strlen(pPatch->pPatchPattern);
@@ -980,6 +984,12 @@ void CSSFixes::SDK_OnAllLoaded()
 	sharesys->RegisterLibrary(myself, "CSSFixes");
 }
 
+bool CSSFixes::RegisterConCommandBase(ConCommandBase *pVar)
+{
+	/* Always call META_REGCVAR instead of going through the engine. */
+	return META_REGCVAR(pVar);
+}
+
 void CSSFixes::SDK_OnUnload()
 {
 	if(g_pDetour_InputTestActivator != NULL)
@@ -1045,7 +1055,7 @@ void CSSFixes::SDK_OnUnload()
 	gameconfs->CloseGameConfigFile(g_pGameConf);
 
 	// Revert all applied patches
-	for(size_t i = 0; i < sizeof(gs_Patches) / sizeof(*gs_Patches); i++)
+	for(size_t i = 0; i < gs_Patches.size(); i++)
 	{
 		struct SrcdsPatch *pPatch = &gs_Patches[i];
 		int PatchLen = strlen(pPatch->pPatchPattern);
@@ -1075,6 +1085,8 @@ void CSSFixes::SDK_OnUnload()
 
 bool CSSFixes::SDK_OnMetamodLoad(ISmmAPI *ismm, char *error, size_t maxlen, bool late)
 {
+	GET_V_IFACE_CURRENT(GetEngineFactory, g_pCVar, ICvar, CVAR_INTERFACE_VERSION);
+	ConVar_Register(0, this);
 	return true;
 }
 
