@@ -194,6 +194,7 @@ ConVar *g_SvForceCTSpawn = CreateConVar("sv_cssfixes_force_ct_spawnpoints", "1",
 ConVar *g_SvSkipCashReset = CreateConVar("sv_cssfixes_skip_cash_reset", "1", FCVAR_NOTIFY, "Skip reset cash to 16000 when buying an item");
 ConVar *g_SvGameEndUnFreeze = CreateConVar("sv_cssfixes_gameend_unfreeze", "1", FCVAR_NOTIFY, "Allow people to run around freely after game end");
 ConVar *g_SvAlwaysTransmitPointViewControl = CreateConVar("sv_cssfixes_always_transmit_point_viewcontrol", "0", FCVAR_NOTIFY, "Always transmit point_viewcontrol for debugging purposes");
+ConVar *g_SvLogs = CreateConVar("sv_cssfixes_logs", "0", FCVAR_NOTIFY, "Add extra logs of action performed");
 
 std::vector<SrcdsPatch> gs_Patches = {};
 
@@ -259,7 +260,10 @@ DETOUR_DECL_MEMBER1(DETOUR_PostConstructor, void, const char *, szClassname)
 		// Only CT spawnpoints
 		if(g_SvForceCTSpawn->GetInt() && strcasecmp(szClassname, "info_player_terrorist") == 0)
 		{
-			g_pSM->LogMessage(myself, "Forcing CT spawn");
+			if (g_SvLogs->GetInt())
+			{
+				g_pSM->LogMessage(myself, "Forcing CT spawn");
+			}
 			szClassname = "info_player_counterterrorist";
 		}
 
@@ -360,7 +364,10 @@ DETOUR_DECL_MEMBER2(DETOUR_KeyValue, bool, const char *, szKeyName, const char *
 		strcasecmp(szKeyName, "classname") == 0 &&
 		strcasecmp(szValue, "info_player_terrorist") == 0)
 	{
-		g_pSM->LogMessage(myself, "Forcing CT spawn");
+		if (g_SvLogs->GetInt())
+		{
+			g_pSM->LogMessage(myself, "Forcing CT spawn");
+		}
 
 		// Only CT spawnpoints
 		szValue = "info_player_counterterrorist";
@@ -369,7 +376,10 @@ DETOUR_DECL_MEMBER2(DETOUR_KeyValue, bool, const char *, szKeyName, const char *
 	{
 		const char *pClassname = gamehelpers->GetEntityClassname(pEntity);
 
-		g_pSM->LogMessage(myself, "Forcing CT buyzone");
+		if (g_SvLogs->GetInt())
+		{
+			g_pSM->LogMessage(myself, "Forcing CT buyzone");
+		}
 
 		// All buyzones should be CT buyzones
 		if(pClassname && strcasecmp(pClassname, "func_buyzone") == 0)
@@ -813,7 +823,10 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			"cstrike/bin/server_srv.so"
 		});
 
-		g_pSM->LogMessage(myself, "Forcing CT spawn");
+		if (g_SvLogs->GetInt())
+		{
+			g_pSM->LogMessage(myself, "Forcing CT spawn");
+		}
 	}
 
 	if (g_SvSkipCashReset->GetInt())
