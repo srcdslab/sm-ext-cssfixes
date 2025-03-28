@@ -194,7 +194,7 @@ ConVar *g_SvForceCTSpawn = CreateConVar("sv_cssfixes_force_ct_spawnpoints", "1",
 ConVar *g_SvSkipCashReset = CreateConVar("sv_cssfixes_skip_cash_reset", "1", FCVAR_NOTIFY, "Skip reset cash to 16000 when buying an item");
 ConVar *g_SvGameEndUnFreeze = CreateConVar("sv_cssfixes_gameend_unfreeze", "1", FCVAR_NOTIFY, "Allow people to run around freely after game end");
 ConVar *g_SvAlwaysTransmitPointViewControl = CreateConVar("sv_cssfixes_always_transmit_point_viewcontrol", "0", FCVAR_NOTIFY, "Always transmit point_viewcontrol for debugging purposes");
-ConVar *g_SvLogs = CreateConVar("sv_cssfixes_logs", "1", FCVAR_NOTIFY, "Add extra logs of action performed");
+ConVar *g_SvLogs = CreateConVar("sv_cssfixes_logs", "0", FCVAR_NOTIFY, "Add extra logs of action performed");
 
 std::vector<SrcdsPatch> gs_Patches = {};
 
