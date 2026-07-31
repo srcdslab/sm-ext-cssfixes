@@ -22,4 +22,9 @@ for sdk_name in Extension.sdks:
 
     Extension.AddCDetour(binary)
 
+    # Silence fatal errors on unrecognized Clang warning flags from CDetour
+    if cxx.family in ['gcc', 'clang']:
+        binary.compiler.cflags += ['-Wno-unknown-warning-option']
+        binary.compiler.cxxflags += ['-Wno-unknown-warning-option']
+
 Extension.extensions += builder.Add(project)
