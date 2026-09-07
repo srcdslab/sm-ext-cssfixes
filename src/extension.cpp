@@ -66,14 +66,10 @@ bool UTIL_ContainsDataTable(SendTable *pTable, const char *name)
 		{
 			pname = table->GetName();
 			if (pname && strcmp(name, pname) == 0)
-			{
 				return true;
-			}
 
 			if (UTIL_ContainsDataTable(table, name))
-			{
 				return true;
-			}
 		}
 	}
 
@@ -106,6 +102,7 @@ void UTIL_StringToVector( float *pVector, const char *pString )
 		pstr++;
 		pfront = pstr;
 	}
+
 	for ( j++; j < 3; j++ )
 	{
 		pVector[j] = 0;
@@ -192,7 +189,6 @@ SMEXT_LINK(&g_Interface);
 
 ConVar *g_SvForceCTSpawn = CreateConVar("sv_cssfixes_force_ct_spawnpoints", "1", FCVAR_NOTIFY, "Forces all spawnpoints to be on CT side");
 ConVar *g_SvSkipCashReset = CreateConVar("sv_cssfixes_skip_cash_reset", "1", FCVAR_NOTIFY, "Skip reset cash to 16000 when buying an item");
-ConVar *g_SvGameEndUnFreeze = CreateConVar("sv_cssfixes_gameend_unfreeze", "1", FCVAR_NOTIFY, "Allow people to run around freely after game end");
 ConVar *g_SvAlwaysTransmitPointViewControl = CreateConVar("sv_cssfixes_always_transmit_point_viewcontrol", "0", FCVAR_NOTIFY, "Always transmit point_viewcontrol for debugging purposes");
 ConVar *g_SvLogs = CreateConVar("sv_cssfixes_logs", "0", FCVAR_NOTIFY, "Add extra logs of action performed");
 
@@ -221,7 +217,7 @@ CTraceFilterSimple *g_CTraceFilterSimple = NULL;
 /* Fix crash in CBaseFilter::InputTestActivator */
 DETOUR_DECL_MEMBER1(DETOUR_InputTestActivator, void, inputdata_t *, inputdata)
 {
-	if(!inputdata || !inputdata->pActivator || !inputdata->pCaller)
+	if (!inputdata || !inputdata->pActivator || !inputdata->pCaller)
 		return;
 
 	DETOUR_MEMBER_CALL(DETOUR_InputTestActivator)(inputdata);
@@ -252,18 +248,17 @@ DETOUR_DECL_MEMBER1(DETOUR_PostConstructor, void, const char *, szClassname)
 	static typedescription_t *td = gamehelpers->FindInDataMap(pMap, "m_iEFlags");
 	static uint32 offset = td->fieldOffset[TD_OFFSET_NORMAL];
 
-	if(strncasecmp(szClassname, "info_player_", 12) == 0)
+	if (strncasecmp(szClassname, "info_player_", 12) == 0)
 	{
 		// Spawnpoints don't need edicts...
 		*(uint32 *)((intptr_t)pEntity + offset) |= (1<<9); // EFL_SERVER_ONLY
 
 		// Only CT spawnpoints
-		if(g_SvForceCTSpawn->GetInt() && strcasecmp(szClassname, "info_player_terrorist") == 0)
+		if (g_SvForceCTSpawn->GetInt() && strcasecmp(szClassname, "info_player_terrorist") == 0)
 		{
 			if (g_SvLogs->GetInt())
-			{
 				g_pSM->LogMessage(myself, "Forcing CT spawn");
-			}
+
 			szClassname = "info_player_counterterrorist";
 		}
 
@@ -275,9 +270,7 @@ DETOUR_DECL_MEMBER1(DETOUR_PostConstructor, void, const char *, szClassname)
 	for (int i = 0; i < sizeof(pszNonEdicts)/sizeof(*pszNonEdicts); i++)
 	{
 		if (!strcasecmp(szClassname, pszNonEdicts[i]))
-		{
 			*(uint32 *)((intptr_t)pEntity + offset) |= (1<<9); // EFL_SERVER_ONLY
-		}
 	}
 
 	DETOUR_MEMBER_CALL(DETOUR_PostConstructor)(szClassname);
@@ -356,36 +349,28 @@ DETOUR_DECL_MEMBER2(DETOUR_KeyValue, bool, const char *, szKeyName, const char *
 	CBaseEntity *pEntity = (CBaseEntity *)this;
 
 	// Fix crash bug in engine
-	if(strcasecmp(szKeyName, "angle") == 0)
-	{
+	if (strcasecmp(szKeyName, "angle") == 0)
 		szKeyName = "angles";
-	}
-	else if(g_SvForceCTSpawn->GetInt() &&
-		strcasecmp(szKeyName, "classname") == 0 &&
-		strcasecmp(szValue, "info_player_terrorist") == 0)
+	else if (g_SvForceCTSpawn->GetInt() && strcasecmp(szKeyName, "classname") == 0 && strcasecmp(szValue, "info_player_terrorist") == 0)
 	{
 		if (g_SvLogs->GetInt())
-		{
 			g_pSM->LogMessage(myself, "Forcing CT spawn");
-		}
 
 		// Only CT spawnpoints
 		szValue = "info_player_counterterrorist";
 	}
-	else if(g_SvForceCTSpawn->GetInt() && (strcasecmp(szKeyName, "teamnum") == 0 || strcasecmp(szKeyName, "teamnum") == 0))
+	else if (g_SvForceCTSpawn->GetInt() && (strcasecmp(szKeyName, "teamnum") == 0 || strcasecmp(szKeyName, "teamnum") == 0))
 	{
 		const char *pClassname = gamehelpers->GetEntityClassname(pEntity);
 
 		if (g_SvLogs->GetInt())
-		{
 			g_pSM->LogMessage(myself, "Forcing CT buyzone");
-		}
 
 		// All buyzones should be CT buyzones
-		if(pClassname && strcasecmp(pClassname, "func_buyzone") == 0)
+		if (pClassname && strcasecmp(pClassname, "func_buyzone") == 0)
 			szValue = "3";
 	}
-	else if(strcasecmp(szKeyName, "absvelocity") == 0)
+	else if (strcasecmp(szKeyName, "absvelocity") == 0)
 	{
 		static int m_AbsVelocity_offset = 0;
 
@@ -439,10 +424,10 @@ SH_DECL_HOOK2(CTraceFilterSkipTwoEntities, ShouldHitEntity, SH_NOATTRIB, 0, bool
 SH_DECL_HOOK2(CTraceFilterSimple, ShouldHitEntity, SH_NOATTRIB, 0, bool, IHandleEntity *, int);
 bool ShouldHitEntity(IHandleEntity *pHandleEntity, int contentsMask)
 {
-	if(!g_InFireBullets)
+	if (!g_InFireBullets)
 		RETURN_META_VALUE(MRES_IGNORED, true);
 
-	if(META_RESULT_ORIG_RET(bool) == false)
+	if (META_RESULT_ORIG_RET(bool) == false)
 		RETURN_META_VALUE(MRES_IGNORED, false);
 
 	IServerUnknown *pUnk = (IServerUnknown *)pHandleEntity;
@@ -451,35 +436,29 @@ bool ShouldHitEntity(IHandleEntity *pHandleEntity, int contentsMask)
 
 	int iTeam = 0;
 
-	if(index > g_iMaxPlayers && g_pPhysboxToClientMap && index < 2048)
-	{
+	if (index > g_iMaxPlayers && g_pPhysboxToClientMap && index < 2048)
 		index = g_pPhysboxToClientMap[index];
-	}
 
-	if(index >= -3 && index <= -1)
-	{
+	if (index >= -3 && index <= -1)
 		iTeam = -index;
-	}
-	else if(index < 1 || index > g_iMaxPlayers)
-	{
+	else if (index < 1 || index > g_iMaxPlayers)
 		RETURN_META_VALUE(MRES_IGNORED, true);
-	}
 
 	char lifeState = 0;
-	if(!iTeam)
+	if (!iTeam)
 	{
 		IGamePlayer *pPlayer = playerhelpers->GetGamePlayer(index);
-		if(!pPlayer || !pPlayer->GetEdict())
+		if (!pPlayer || !pPlayer->GetEdict())
 			RETURN_META_VALUE(MRES_IGNORED, true);
 
 		IPlayerInfo *pInfo = pPlayer->GetPlayerInfo();
-		if(!pInfo)
+		if (!pInfo)
 			RETURN_META_VALUE(MRES_IGNORED, true);
 
 		iTeam = pInfo->GetTeamIndex();
 
 		static int offset = 0;
-		if(!offset)
+		if (!offset)
 		{
 			sm_sendprop_info_t spi;
 			if (!gamehelpers->FindSendPropInfo("CBasePlayer", "m_lifeState", &spi))
@@ -491,7 +470,7 @@ bool ShouldHitEntity(IHandleEntity *pHandleEntity, int contentsMask)
 		lifeState = *(char *)((uint8_t *)pHandleEntity + offset);
 	}
 
-	if(iTeam == g_FireBulletPlayerTeam || lifeState != 0)
+	if (iTeam == g_FireBulletPlayerTeam || lifeState != 0)
 		RETURN_META_VALUE(MRES_SUPERCEDE, false);
 
 	RETURN_META_VALUE(MRES_IGNORED, true);
@@ -499,15 +478,15 @@ bool ShouldHitEntity(IHandleEntity *pHandleEntity, int contentsMask)
 
 DETOUR_DECL_STATIC9(DETOUR_FireBullets, void, int, iPlayerIndex, const Vector *, vOrigin, const QAngle *, vAngles, int, iWeaponID, int, iMode, int, iSeed, float, flSpread, float, _f1, float, _f2)
 {
-	if(iPlayerIndex <= 0 || iPlayerIndex > playerhelpers->GetMaxClients())
+	if (iPlayerIndex <= 0 || iPlayerIndex > playerhelpers->GetMaxClients())
 		return DETOUR_STATIC_CALL(DETOUR_FireBullets)(iPlayerIndex, vOrigin, vAngles, iWeaponID, iMode, iSeed, flSpread, _f1, _f2);
 
 	IGamePlayer *pPlayer = playerhelpers->GetGamePlayer(iPlayerIndex);
-	if(!pPlayer || !pPlayer->GetEdict())
+	if (!pPlayer || !pPlayer->GetEdict())
 		return DETOUR_STATIC_CALL(DETOUR_FireBullets)(iPlayerIndex, vOrigin, vAngles, iWeaponID, iMode, iSeed, flSpread, _f1, _f2);
 
 	IPlayerInfo *pInfo = pPlayer->GetPlayerInfo();
-	if(!pInfo)
+	if (!pInfo)
 		return DETOUR_STATIC_CALL(DETOUR_FireBullets)(iPlayerIndex, vOrigin, vAngles, iWeaponID, iMode, iSeed, flSpread, _f1, _f2);
 
 	g_FireBulletPlayerTeam = pInfo->GetTeamIndex();
@@ -520,7 +499,7 @@ DETOUR_DECL_STATIC9(DETOUR_FireBullets, void, int, iPlayerIndex, const Vector *,
 DETOUR_DECL_MEMBER1(DETOUR_SwingOrStab, bool, bool, bStab)
 {
 	static int offset = 0;
-	if(!offset)
+	if (!offset)
 	{
 		IServerUnknown *pUnk = (IServerUnknown *)this;
 		IServerNetworkable *pNet = pUnk->GetNetworkable();
@@ -538,15 +517,15 @@ DETOUR_DECL_MEMBER1(DETOUR_SwingOrStab, bool, bool, bStab)
 	CBaseHandle &hndl = *(CBaseHandle *)((uint8_t *)this + offset);
 
 	edict_t *pEdict = gamehelpers->GetHandleEntity(hndl);
-	if(!pEdict)
+	if (!pEdict)
 		return DETOUR_MEMBER_CALL(DETOUR_SwingOrStab)(bStab);
 
 	IGamePlayer *pPlayer = playerhelpers->GetGamePlayer(pEdict);
-	if(!pPlayer || !pPlayer->GetEdict())
+	if (!pPlayer || !pPlayer->GetEdict())
 		return DETOUR_MEMBER_CALL(DETOUR_SwingOrStab)(bStab);
 
 	IPlayerInfo *pInfo = pPlayer->GetPlayerInfo();
-	if(!pInfo)
+	if (!pInfo)
 		return DETOUR_MEMBER_CALL(DETOUR_SwingOrStab)(bStab);
 
 	g_FireBulletPlayerTeam = pInfo->GetTeamIndex();
@@ -560,7 +539,7 @@ DETOUR_DECL_MEMBER1(DETOUR_SwingOrStab, bool, bool, bStab)
 
 cell_t PhysboxToClientMap(IPluginContext *pContext, const cell_t *params)
 {
-	if(params[2])
+	if (params[2])
 		pContext->LocalToPhysAddr(params[1], (cell_t **)&g_pPhysboxToClientMap);
 	else
 		g_pPhysboxToClientMap = NULL;
@@ -577,9 +556,9 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	g_iMaxPlayers = playerhelpers->GetMaxClients();
 
 	char conf_error[255] = "";
-	if(!gameconfs->LoadGameConfigFile("CSSFixes.games", &g_pGameConf, conf_error, sizeof(conf_error)))
+	if (!gameconfs->LoadGameConfigFile("CSSFixes.games", &g_pGameConf, conf_error, sizeof(conf_error)))
 	{
-		if(conf_error[0])
+		if (conf_error[0])
 			snprintf(error, maxlength, "Could not read CSSFixes.games.txt: %s", conf_error);
 
 		return false;
@@ -588,7 +567,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	CDetourManager::Init(g_pSM->GetScriptingEngine(), g_pGameConf);
 
 	g_pDetour_InputTestActivator = DETOUR_CREATE_MEMBER(DETOUR_InputTestActivator, "CBaseFilter_InputTestActivator");
-	if(g_pDetour_InputTestActivator == NULL)
+	if (g_pDetour_InputTestActivator == NULL)
 	{
 		snprintf(error, maxlength, "Could not create detour for CBaseFilter_InputTestActivator");
 		SDK_OnUnload();
@@ -596,7 +575,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	}
 
 	g_pDetour_PostConstructor = DETOUR_CREATE_MEMBER(DETOUR_PostConstructor, "CBaseEntity_PostConstructor");
-	if(g_pDetour_PostConstructor == NULL)
+	if (g_pDetour_PostConstructor == NULL)
 	{
 		snprintf(error, maxlength, "Could not create detour for CBaseEntity_PostConstructor");
 		SDK_OnUnload();
@@ -620,7 +599,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	}
 
 	g_pDetour_FindUseEntity = DETOUR_CREATE_MEMBER(DETOUR_FindUseEntity, "CBasePlayer_FindUseEntity");
-	if(g_pDetour_FindUseEntity == NULL)
+	if (g_pDetour_FindUseEntity == NULL)
 	{
 		snprintf(error, maxlength, "Could not create detour for CBasePlayer_FindUseEntity");
 		SDK_OnUnload();
@@ -628,7 +607,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	}
 
 	g_pDetour_CTraceFilterSimple = DETOUR_CREATE_MEMBER(DETOUR_CTraceFilterSimple, "CTraceFilterSimple_CTraceFilterSimple");
-	if(g_pDetour_CTraceFilterSimple == NULL)
+	if (g_pDetour_CTraceFilterSimple == NULL)
 	{
 		snprintf(error, maxlength, "Could not create detour for CTraceFilterSimple_CTraceFilterSimple");
 		SDK_OnUnload();
@@ -636,7 +615,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	}
 
 	g_pDetour_KeyValue = DETOUR_CREATE_MEMBER(DETOUR_KeyValue, "CBaseEntity_KeyValue");
-	if(g_pDetour_KeyValue == NULL)
+	if (g_pDetour_KeyValue == NULL)
 	{
 		snprintf(error, maxlength, "Could not create detour for CBaseEntity_KeyValue");
 		SDK_OnUnload();
@@ -644,7 +623,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	}
 
 	g_pDetour_FireBullets = DETOUR_CREATE_STATIC(DETOUR_FireBullets, "FX_FireBullets");
-	if(g_pDetour_FireBullets == NULL)
+	if (g_pDetour_FireBullets == NULL)
 	{
 		snprintf(error, maxlength, "Could not create detour for FX_FireBullets");
 		SDK_OnUnload();
@@ -652,7 +631,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	}
 
 	g_pDetour_SwingOrStab = DETOUR_CREATE_MEMBER(DETOUR_SwingOrStab, "CKnife_SwingOrStab");
-	if(g_pDetour_SwingOrStab == NULL)
+	if (g_pDetour_SwingOrStab == NULL)
 	{
 		snprintf(error, maxlength, "Could not create detour for CKnife_SwingOrStab");
 		SDK_OnUnload();
@@ -671,7 +650,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 
 	// Find VTable for CTraceFilterSkipTwoEntities
 	uintptr_t pCTraceFilterSkipTwoEntities;
-	if(!g_pGameConf->GetMemSig("CTraceFilterSkipTwoEntities", (void **)(&pCTraceFilterSkipTwoEntities)) || !pCTraceFilterSkipTwoEntities)
+	if (!g_pGameConf->GetMemSig("CTraceFilterSkipTwoEntities", (void **)(&pCTraceFilterSkipTwoEntities)) || !pCTraceFilterSkipTwoEntities)
 	{
 		snprintf(error, maxlength, "Failed to find CTraceFilterSkipTwoEntities.\n");
 		SDK_OnUnload();
@@ -682,7 +661,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 
 	// Find VTable for CTraceFilterSimple
 	uintptr_t pCTraceFilterSimple;
-	if(!g_pGameConf->GetMemSig("CTraceFilterSimple", (void **)(&pCTraceFilterSimple)) || !pCTraceFilterSimple)
+	if (!g_pGameConf->GetMemSig("CTraceFilterSimple", (void **)(&pCTraceFilterSimple)) || !pCTraceFilterSimple)
 	{
 		snprintf(error, maxlength, "Failed to find CTraceFilterSimple.\n");
 		SDK_OnUnload();
@@ -693,7 +672,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 
 	// Find VTable for CTraceFilterNoNPCsOrPlayer
 	uintptr_t pCTraceFilterNoNPCsOrPlayer;
-	if(!g_pGameConf->GetMemSig("CTraceFilterNoNPCsOrPlayer", (void **)(&pCTraceFilterNoNPCsOrPlayer)) || !pCTraceFilterNoNPCsOrPlayer)
+	if (!g_pGameConf->GetMemSig("CTraceFilterNoNPCsOrPlayer", (void **)(&pCTraceFilterNoNPCsOrPlayer)) || !pCTraceFilterNoNPCsOrPlayer)
 	{
 		snprintf(error, maxlength, "Failed to find CTraceFilterNoNPCsOrPlayer.\n");
 		SDK_OnUnload();
@@ -711,7 +690,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		// 0: game_ui should not apply FL_ONTRAIN flag, else client prediction turns off
 		{
 			"_ZN7CGameUI5ThinkEv",
-			(unsigned char *)"\x0F\x82\xC4\x03\x00\x00\x83\xEC\x08\x6A\x10\x53\xE8\x91\x00\xF5\xFF",
+			(unsigned char *)"\x0F\x82\xC4\x03\x00\x00\x83\xEC\x08\x6A\x10\x53\xE8\xF1\xFA\xF4\xFF",
 			"xx????xx?x?xx????",
 			(unsigned char *)"\x0F\x82\xC4\x03\x00\x00\x83\xEC\x08\x6A\x10\x53\x90\x90\x90\x90\x90",
 			"cstrike/bin/server_srv.so"
@@ -744,9 +723,9 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		// 7: disable player->m_takedamage = m_nOldTakeDamage in point_viewcontrol->Disable
 		{
 			"_ZN14CTriggerCamera7DisableEv",
-			(unsigned char *)"\x74\x1A\x8B\x16\x8B\x92\x04\x02\x00\x00\x81\xFA\x30\xF9\x29\x00\x0F\x85",
+			(unsigned char *)"\x74\x1A\x8B\x16\x8B\x92\x08\x02\x00\x00\x81\xFA\xF0\x09\x2A\x00\x0F\x85",
 			"x?xxxx????xx????xx",
-			(unsigned char *)"\xEB\x1A\x8B\x16\x8B\x92\x04\x02\x00\x00\x81\xFA\x30\xF9\x29\x00\x0F\x85",
+			(unsigned char *)"\xEB\x1A\x8B\x16\x8B\x92\x08\x02\x00\x00\x81\xFA\xF0\x09\x2A\x00\x0F\x85",
 			"cstrike/bin/server_srv.so"
 		},
 		// 8: userinfo stringtable don't write fakeclient field
@@ -786,21 +765,41 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			"cstrike/bin/server_srv.so"
 		},
 		// 14: CGameMovement::LadderMove NOP out player->SetGravity( 0 );
-		// This is in a cloned function which has a weird symbol (_ZN13CGameMovement10LadderMoveEv_part_0) so I went with the function right before it
+		// This is in a cloned function with a local symbol (_ZN13CGameMovement10LadderMoveEv.part.0), so use the preceding exported function as the scan anchor.
 		{
 			"_ZN13CGameMovement12CheckFallingEv",
-			(unsigned char *)"\xC7\x80\xA4\x02\x00\x00\x00\x00\x00\x00\x8B\x03\x8B\x80",
-			"xx????????xxxx",
-			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x8B\x03\x8B\x80",
+			(unsigned char *)"\xC7\x86\xA4\x02\x00\x00\x00\x00\x00\x00",
+			"xxxxxxxxxx",
+			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
+			"cstrike/bin/server_srv.so",
+			0x600
+		},
+		// 15: void CBaseGrenade::Explode( trace_t *pTrace, int bitsDamageType ) NOP out UTIL_DecalTrace( pTrace, "Scorch" ); to stop grenades from causing
+		// "Too many indices for index buffer. Tell a programmer". Grenades cause decals on too many faces for the client to handle.
+		{
+			"_ZN12CBaseGrenade7ExplodeEP10CGameTracei",
+			(unsigned char *)"\xE8\xDA\x8E\x21\x00",
+			"xxxxx",
+			(unsigned char *)"\x90\x90\x90\x90\x90",
 			"cstrike/bin/server_srv.so"
 		},
-		// 18: Remove weird filename handle check in CZipPackFile::GetFileInfo that broke loading mixed case files in bsp pakfiles
+		// 16: void CPlantedC4::Explode( trace_t *pTrace, int bitsDamageType ) NOP out UTIL_DecalTrace( pTrace, "Scorch" ); same reason as 15.
 		{
-			"_ZN12CZipPackFile11GetFileInfoEPKcRiRxS2_S2_Rt",
-			(unsigned char *)"\x75\x00\x8B\x09",
-			"x?xx",
-			(unsigned char *)"\x90\x90\x8B\x09",
-			"bin/dedicated_srv.so"
+			"_ZN10CPlantedC47ExplodeEP10CGameTracei",
+			(unsigned char *)"\xE8\x72\xBE\xEB\xFF",
+			"xxxxx",
+			(unsigned char *)"\x90\x90\x90\x90\x90",
+			"cstrike/bin/server_srv.so"
+		},
+		// 17: void CEnvExplosion::InputExplode( inputdata_t &inputdata ) NOP out UTIL_DecalTrace( &tr, "Scorch" ); same reason as 15.
+		{
+			"_ZN13CEnvExplosion12InputExplodeER11inputdata_t",
+			(unsigned char *)"\xE8\xDA\x2A\x1A\x00",
+			"xxxxx",
+			(unsigned char *)"\x90\x90\x90\x90\x90",
+			"cstrike/bin/server_srv.so",
+			0x800,
+			1
 		}
 	};
 
@@ -809,15 +808,15 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		gs_Patches.push_back({
 			// 2: only select CT spawnpoints
 			"_ZN9CCSPlayer19EntSelectSpawnPointEv",
-			(unsigned char *)"\x74\x57\x83\xEC\x0C\x53\xE8\x6E\x34\xCA\xFF\x83\xC4\x10\x83\xF8\x02\x0F\x84",
+			(unsigned char *)"\x74\x57\x83\xEC\x0C\x53\xE8\xDE\x26\xCA\xFF\x83\xC4\x10\x83\xF8\x02\x0F\x84",
 			"x?xx?xx????xx?xx?xx",
-			(unsigned char *)"\xEB\x57\x83\xEC\x0C\x53\xE8\x6E\x34\xCA\xFF\x83\xC4\x10\x83\xF8\x02\x0F\x84",
+			(unsigned char *)"\xEB\x57\x83\xEC\x0C\x53\xE8\xDE\x26\xCA\xFF\x83\xC4\x10\x83\xF8\x02\x0F\x84",
 			"cstrike/bin/server_srv.so"
 		});
 		gs_Patches.push_back({
 			// 3: don't check if we have T spawns
 			"_ZN12CCSGameRules18NeededPlayersCheckERb",
-			(unsigned char *)"\x74\x0A\x8B\x83\x94\x02\x00\x00\x85\xC0\x75\x4A\x83\xEC\x0C\x68\xE8\xCF\x93\x00\xE8\xA9\x46\x52\x00\x5A\x59",
+			(unsigned char *)"\x74\x0A\x8B\x83\x94\x02\x00\x00\x85\xC0\x75\x4A\x83\xEC\x0C\x68\x08\x07\x94\x00\xE8\xB9\x49\x52\x00\x5A\x59",
 			"xxxx????xxx?xx?x????x????xx",
 			(unsigned char *)"\x75\x54\x8B\x83\x94\x02\x00\x00\x85\xC0\x75\x4A\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
 			"cstrike/bin/server_srv.so"
@@ -841,27 +840,6 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		});
 	}
 
-	if (g_SvGameEndUnFreeze->GetInt())
-	{
-		gs_Patches.push_back({
-			// 16: allow people to run around freely after game end, by overwriting pPlayer->AddFlag( FL_FROZEN ); line 3337 in cs_gamerules.cpp
-			// this change is desired for the new mapvoting feature so that people can still freely move at the end of the map while the vote is running.
-			"_ZN12CCSGameRules16GoToIntermissionEv",
-			(unsigned char *)"\x74\x0E\x83\xEC\x08\x6A\x40\x50",
-			"xxxxxxxx",
-			(unsigned char *)"\xEB\x0E\x83\xEC\x08\x6A\x40\x50",
-			"cstrike/bin/server_srv.so"
-		});
-		gs_Patches.push_back({
-			//17 also jump over boolean = true // freeze players while in intermission		m_bFreezePeriod = true;
-			"_ZN12CCSGameRules16GoToIntermissionEv",
-			(unsigned char *)"\x75\x0F\xE8\x69\xCE\xDA\xFF\x8B\x45\x08",
-			"xxxxxxxxxx",
-			(unsigned char *)"\xEB\x0F\xE8\x69\xCE\xDA\xFF\x8B\x45\x08",
-			"cstrike/bin/server_srv.so"
-		});
-	}
-
 	if (g_SvAlwaysTransmitPointViewControl->GetInt())
 	{
 		gs_Patches.push_back({
@@ -875,7 +853,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	}
 
 	// Apply all patches
-	for(size_t i = 0; i < gs_Patches.size(); i++)
+	for (size_t i = 0; i < gs_Patches.size(); i++)
 	{
 		struct SrcdsPatch *pPatch = &gs_Patches[i];
 		int PatchLen = strlen(pPatch->pPatchPattern);
@@ -885,7 +863,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 #else
 		void *pBinary = dlopen(pPatch->pLibrary, RTLD_NOW);
 #endif
-		if(!pBinary)
+		if (!pBinary)
 		{
 			g_pSM->LogError(myself, "Could not dlopen %s", pPatch->pLibrary);
 			bSuccess = false;
@@ -898,7 +876,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 #else
 		dlclose(pBinary);
 #endif
-		if(!pPatch->pAddress)
+		if (!pPatch->pAddress)
 		{
 			g_pSM->LogError(myself, "Could not find symbol: %s in %s (%p)",
 				pPatch->pSignature, pPatch->pLibrary, pBinary);
@@ -908,14 +886,14 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 
 		SrcdsPatch::Restore **ppRestore = &pPatch->pRestore;
 
-		if(pPatch->functionCall)
+		if (pPatch->functionCall)
 		{
 #ifdef _WIN32
 			HMODULE pFunctionBinary = LoadLibrary(pPatch->pFunctionLibrary);
 #else
 			void* pFunctionBinary = dlopen(pPatch->pFunctionLibrary, RTLD_NOW);
 #endif
-			if(!pFunctionBinary)
+			if (!pFunctionBinary)
 			{
 				g_pSM->LogError(myself, "Could not dlopen %s", pPatch->pFunctionLibrary);
 				bSuccess = false;
@@ -928,7 +906,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 #else
 			dlclose(pFunctionBinary);
 #endif
-			if(!pPatch->pSignatureAddress)
+			if (!pPatch->pSignatureAddress)
 			{
 				g_pSM->LogError(myself, "Could not find patch signature symbol: %s in %s (%p)",
 					(char *)pPatch->pPatchSignature, pPatch->pFunctionLibrary, pFunctionBinary);
@@ -939,17 +917,17 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 
 		uintptr_t ofs = 0;
 		int found;
-		for(found = 0; found < pPatch->occurrences; found++)
+		for (found = 0; found < pPatch->occurrences; found++)
 		{
 			uintptr_t pPatchAddress;
-			if(pPatch->functionCall)
+			if (pPatch->functionCall)
 				pPatchAddress = FindFunctionCall(pPatch->pAddress + ofs, pPatch->pSignatureAddress, pPatch->range - ofs);
 			else
 				pPatchAddress = FindPattern(pPatch->pAddress + ofs, pPatch->pPatchSignature, pPatch->pPatchPattern, pPatch->range - ofs);
 
-			if(!pPatchAddress)
+			if (!pPatchAddress)
 			{
-				if(found)
+				if (found)
 					break;
 
 				g_pSM->LogError(myself, "Could not find patch signature for symbol: %s", pPatch->pSignature);
@@ -965,7 +943,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			pRestore->pOriginal = (unsigned char *)malloc(PatchLen * sizeof(unsigned char));
 
 			SourceHook::SetMemAccess((void *)pPatchAddress, PatchLen, SH_MEM_READ|SH_MEM_WRITE|SH_MEM_EXEC);
-			for(int j = 0; j < PatchLen; j++)
+			for (int j = 0; j < PatchLen; j++)
 			{
 				pRestore->pOriginal[j] = *(unsigned char *)(pPatchAddress + j);
 				*(unsigned char *)(pPatchAddress + j) = pPatch->pPatch[j];
@@ -1005,13 +983,13 @@ bool CSSFixes::RegisterConCommandBase(ConCommandBase *pVar)
 
 void CSSFixes::SDK_OnUnload()
 {
-	if(g_pDetour_InputTestActivator != NULL)
+	if (g_pDetour_InputTestActivator != NULL)
 	{
 		g_pDetour_InputTestActivator->Destroy();
 		g_pDetour_InputTestActivator = NULL;
 	}
 
-	if(g_pDetour_PostConstructor != NULL)
+	if (g_pDetour_PostConstructor != NULL)
 	{
 		g_pDetour_PostConstructor->Destroy();
 		g_pDetour_PostConstructor = NULL;
@@ -1029,46 +1007,46 @@ void CSSFixes::SDK_OnUnload()
 		g_pDetour_PassesFilterImpl = NULL;
 	}
 
-	if(g_pDetour_FindUseEntity != NULL)
+	if (g_pDetour_FindUseEntity != NULL)
 	{
 		g_pDetour_FindUseEntity->Destroy();
 		g_pDetour_FindUseEntity = NULL;
 	}
 
-	if(g_pDetour_CTraceFilterSimple != NULL)
+	if (g_pDetour_CTraceFilterSimple != NULL)
 	{
 		g_pDetour_CTraceFilterSimple->Destroy();
 		g_pDetour_CTraceFilterSimple = NULL;
 	}
 
-	if(g_pDetour_KeyValue != NULL)
+	if (g_pDetour_KeyValue != NULL)
 	{
 		g_pDetour_KeyValue->Destroy();
 		g_pDetour_KeyValue = NULL;
 	}
 
-	if(g_pDetour_FireBullets != NULL)
+	if (g_pDetour_FireBullets != NULL)
 	{
 		g_pDetour_FireBullets->Destroy();
 		g_pDetour_FireBullets = NULL;
 	}
 
-	if(g_pDetour_SwingOrStab != NULL)
+	if (g_pDetour_SwingOrStab != NULL)
 	{
 		g_pDetour_SwingOrStab->Destroy();
 		g_pDetour_SwingOrStab = NULL;
 	}
 
-	if(g_SH_SkipTwoEntitiesShouldHitEntity)
+	if (g_SH_SkipTwoEntitiesShouldHitEntity)
 		SH_REMOVE_HOOK_ID(g_SH_SkipTwoEntitiesShouldHitEntity);
 
-	if(g_SH_SimpleShouldHitEntity)
+	if (g_SH_SimpleShouldHitEntity)
 		SH_REMOVE_HOOK_ID(g_SH_SimpleShouldHitEntity);
 
 	gameconfs->CloseGameConfigFile(g_pGameConf);
 
 	// Revert all applied patches
-	for(size_t i = 0; i < gs_Patches.size(); i++)
+	for (size_t i = 0; i < gs_Patches.size(); i++)
 	{
 		struct SrcdsPatch *pPatch = &gs_Patches[i];
 		int PatchLen = strlen(pPatch->pPatchPattern);
@@ -1076,11 +1054,11 @@ void CSSFixes::SDK_OnUnload()
 		SrcdsPatch::Restore *pRestore = pPatch->pRestore;
 		while(pRestore)
 		{
-			if(!pRestore->pOriginal)
+			if (!pRestore->pOriginal)
 				break;
 
 			SourceHook::SetMemAccess((void *)pRestore->pPatchAddress, PatchLen, SH_MEM_READ|SH_MEM_WRITE|SH_MEM_EXEC);
-			for(int j = 0; j < PatchLen; j++)
+			for (int j = 0; j < PatchLen; j++)
 			{
 				*(unsigned char *)(pRestore->pPatchAddress + j) = pRestore->pOriginal[j];
 			}
@@ -1110,13 +1088,13 @@ uintptr_t FindPattern(uintptr_t BaseAddr, const unsigned char *pData, const char
 
 	pMemory = reinterpret_cast<unsigned char *>(BaseAddr);
 
-	for(uintptr_t i = 0; i < MaxSize; i++)
+	for (uintptr_t i = 0; i < MaxSize; i++)
 	{
 		uintptr_t Matches = 0;
 		while(*(pMemory + i + Matches) == pData[Matches] || pPattern[Matches] != 'x')
 		{
 			Matches++;
-			if(Matches == PatternLen)
+			if (Matches == PatternLen)
 				return (uintptr_t)(pMemory + i);
 		}
 	}
@@ -1129,15 +1107,15 @@ uintptr_t FindFunctionCall(uintptr_t BaseAddr, uintptr_t Function, size_t MaxSiz
 	unsigned char *pMemory;
 	pMemory = reinterpret_cast<unsigned char *>(BaseAddr);
 
-	for(uintptr_t i = 0; i < MaxSize; i++)
+	for (uintptr_t i = 0; i < MaxSize; i++)
 	{
-		if(pMemory[i] == 0xE8) // CALL
+		if (pMemory[i] == 0xE8) // CALL
 		{
 			uintptr_t CallAddr = *(uintptr_t *)(pMemory + i + 1);
 
 			CallAddr += (uintptr_t)(pMemory + i + 5);
 
-			if(CallAddr == Function)
+			if (CallAddr == Function)
 				return (uintptr_t)(pMemory + i);
 
 			i += 4;

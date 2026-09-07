@@ -5,3 +5,4 @@ safetyhook
 ambuild
 *.env
 *.ps1
+*.so
