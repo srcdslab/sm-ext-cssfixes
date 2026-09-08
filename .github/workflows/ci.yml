@@ -5,6 +5,7 @@ on:
     branches:
       - master
       - main
+      - new-master
     tags:
       - "*"
   pull_request:
