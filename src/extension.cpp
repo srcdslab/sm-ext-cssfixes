@@ -61,7 +61,7 @@
 		#error "unsupported architecture"
 	#endif
 #else
-	#error "This extension is only supported for windows"
+	#error "This extension is only supported for linux x86/x86-64"
 #endif
 
 bool UTIL_ContainsDataTable(SendTable *pTable, const char *name)
