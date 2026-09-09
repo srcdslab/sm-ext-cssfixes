@@ -964,11 +964,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		struct SrcdsPatch *pPatch = &gs_Patches[i];
 		int PatchLen = strlen(pPatch->pPatchPattern);
 
-#ifdef _WIN32
-		HMODULE pBinary = LoadLibrary(pPatch->pLibrary);
-#else
 		void *pBinary = dlopen(pPatch->pLibrary, RTLD_NOW);
-#endif
 		if (!pBinary)
 		{
 			g_pSM->LogError(myself, "Could not dlopen %s", pPatch->pLibrary);
@@ -977,11 +973,9 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		}
 
 		pPatch->pAddress = (uintptr_t)memutils->ResolveSymbol(pBinary, pPatch->pSignature);
-#ifdef _WIN32
-		FreeLibrary(pBinary);
-#else
+
 		dlclose(pBinary);
-#endif
+
 		if (!pPatch->pAddress)
 		{
 			g_pSM->LogError(myself, "Could not find symbol: %s in %s (%p)",
@@ -994,11 +988,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 
 		if (pPatch->functionCall)
 		{
-#ifdef _WIN32
-			HMODULE pFunctionBinary = LoadLibrary(pPatch->pFunctionLibrary);
-#else
 			void* pFunctionBinary = dlopen(pPatch->pFunctionLibrary, RTLD_NOW);
-#endif
 			if (!pFunctionBinary)
 			{
 				g_pSM->LogError(myself, "Could not dlopen %s", pPatch->pFunctionLibrary);
@@ -1007,11 +997,9 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			}
 
 			pPatch->pSignatureAddress = (uintptr_t)memutils->ResolveSymbol(pFunctionBinary, (char *)pPatch->pPatchSignature);
-#ifdef _WIN32
-			FreeLibrary(pFunctionBinary);
-#else
+
 			dlclose(pFunctionBinary);
-#endif
+
 			if (!pPatch->pSignatureAddress)
 			{
 				g_pSM->LogError(myself, "Could not find patch signature symbol: %s in %s (%p)",
