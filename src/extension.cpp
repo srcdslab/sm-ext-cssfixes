@@ -48,6 +48,22 @@
 #define ClearBit(A,I)	((A)[(I) >> 5] &= ~(1 << ((I) & 31)))
 #define CheckBit(A,I)	!!((A)[(I) >> 5] & (1 << ((I) & 31)))
 
+#if defined PLATFORM_LINUX
+	#if defined KE_ARCH_X86
+		#define SERVER_BIN 		"cstrike/bin/server_srv.so"
+		#define ENGINE_BIN 		"bin/engine_srv.so"
+		#define LIBTIER0_BIN	"bin/libtier0_srv.so"
+	#elif defined KE_ARCH_X64
+		#define SERVER_BIN 		"cstrike/bin/linux64/server_srv.so"
+		#define ENGINE_BIN 		"bin/linux64/engine_srv.so"
+		#define LIBTIER0_BIN	"bin/linux64/libtier0_srv.so"
+	#else
+		#error "unsupported architecture"
+	#endif
+#else
+	#error "This extension is only supported for windows"
+#endif
+
 bool UTIL_ContainsDataTable(SendTable *pTable, const char *name)
 {
 	const char *pname = pTable->GetName();
@@ -694,13 +710,12 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x0F\x82\xC4\x03\x00\x00\x83\xEC\x08\x6A\x10\x53\xE8\xF1\xFA\xF4\xFF",
 			"xx????xx?x?xx????",
 			(unsigned char *)"\x0F\x82\xC4\x03\x00\x00\x83\xEC\x08\x6A\x10\x53\x90\x90\x90\x90\x90",
-			"cstrike/bin/server_srv.so"
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\x0F\x82\x19\x05\x00\x00\xBE\x10\x00\x00\x00\x4C\x89\xEF\xE8\x2A\x2A\x2A\x2A",
 			"xx????xxxxxxxxx????",
 			(unsigned char *)"\x0F\x82\x19\x05\x00\x00\xBE\x10\x00\x00\x00\x4C\x89\xEF\x90\x90\x90\x90\x90",
-			"cstrike/bin/linux64/server_srv.so"
 #endif
+			SERVER_BIN
 		},
 		// 1: player_speedmod should not turn off flashlight
 		{
@@ -709,13 +724,12 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x0F\x85\x00\x00\x00\x00\x83\xEC\x0C\x57\xE8\x1D\xFF\xFF\xFF\x83\xC4\x10\x09\x83",
 			"xx????xx?xx????xx?xx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x83\xEC\x0C\x57\xE8\x1D\xFF\xFF\xFF\x83\xC4\x10\x09\x83",
-			"cstrike/bin/server_srv.so"
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\x0F\x85\x2A\x2A\x2A\x2A\x4C\x89\xEF\xE8\x0C\xFF\xFF\xFF\x41\x09",
 			"xx????xxxx????xx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x4C\x89\xEF\xE8\x0C\xFF\xFF\xFF\x41\x09",
-			"cstrike/bin/linux64/server_srv.so"
 #endif
+			SERVER_BIN
 		},
 		// 5: disable alive check in point_viewcontrol->Disable
 		{
@@ -724,13 +738,12 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x0F\x84\x47\x02\x00\x00\xF6\x83\x40\x01\x00\x00\x20\x0F\x85",
 			"xx????xx?????xx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\xF6\x83\x40\x01\x00\x00\x20\x0F\x85",
-			"cstrike/bin/server_srv.so"
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\x0F\x84\x47\x02\x00\x00\x41\xF6\x84\x24\x0C\x02\x00\x00\x20\x0F\x85",
 			"xx????xxxx????xxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x41\xF6\x84\x24\x0C\x02\x00\x00\x20\x0F\x85",
-			"cstrike/bin/linux64/server_srv.so"
 #endif
+			SERVER_BIN
 		},
 		// 6: disable player->m_takedamage = DAMAGE_NO in point_viewcontrol->Enable
 		{
@@ -739,13 +752,12 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\xC6\x80\xFD\x00\x00\x00\x00\x8B\x83",
 			"xxxxxxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x8B\x83",
-			"cstrike/bin/server_srv.so",
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\xC6\x80\x91\x01\x00\x00\x00\x8B\x83",
 			"xxxxxxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x8B\x83",
-			"cstrike/bin/linux64/server_srv.so",
 #endif
+			SERVER_BIN,
 			0x600
 		},
 		// 7: disable player->m_takedamage = m_nOldTakeDamage in point_viewcontrol->Disable
@@ -755,13 +767,12 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x74\x1A\x8B\x16\x8B\x92\x08\x02\x00\x00\x81\xFA\xF0\x09\x2A\x00\x0F\x85",
 			"x?xxxx????xx????xx",
 			(unsigned char *)"\xEB\x1A\x8B\x16\x8B\x92\x08\x02\x00\x00\x81\xFA\xF0\x09\x2A\x00\x0F\x85",
-			"cstrike/bin/server_srv.so"
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\x74\x21\x48\x8B\x03\x48\x8D\x15\x73\xC3\xC9\xFF\x48\x8B\x80\x10\x04\x00\x00",
-			"x?xxxxx?????xxxxxxx",
+			"x?xxxxx?????xxxxxxxx",
 			(unsigned char *)"\xEB\x21\x48\x8B\x03\x48\x8D\x15\x73\xC3\xC9\xFF\x48\x8B\x80\x10\x04\x00\x00",
-			"cstrike/bin/linux64/server_srv.so"
 #endif
+			SERVER_BIN
 		},
 		// 8: userinfo stringtable don't write fakeclient field
 		{
@@ -770,13 +781,12 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x88\x46\x6C",
 			"xxx",
 			(unsigned char *)"\x90\x90\x90",
-			"bin/engine_srv.so"
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\x41\x88\x44\x24\x6C",
 			"xxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90",
-			"bin/linux64/engine_srv.so"
 #endif
+			ENGINE_BIN
 		},
 		// 10: fix server lagging resulting from too many ConMsgs due to packet spam
 		{
@@ -784,17 +794,9 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"_Z6ConMsgPKcz",
 			"xxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90",
-#if defined KE_ARCH_X86
-			"bin/engine_srv.so",
-#elif defined KE_ARCH_X64
-			"bin/linux64/engine_srv.so",
-#endif
-			0x7d1, 100, true,
-#if defined KE_ARCH_X86
-			"bin/libtier0_srv.so"
-#elif defined KE_ARCH_X64
-			"bin/linux64/libtier0_srv.so"
-#endif
+			ENGINE_BIN,
+			0x7d1, 100,
+			true, LIBTIER0_BIN
 		},
 		// 11: fix server lagging resulting from too many ConMsgs due to packet spam
 		{
@@ -802,17 +804,9 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"Msg",
 			"xxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90",
-#if defined KE_ARCH_X86
-			"bin/engine_srv.so",
-#elif defined KE_ARCH_X64
-			"bin/linux64/engine_srv.so",
-#endif
-			0x800, 100, true,
-#if defined KE_ARCH_X86
-			"bin/libtier0_srv.so"
-#elif defined KE_ARCH_X64
-			"bin/linux64/libtier0_srv.so"
-#endif
+			ENGINE_BIN,
+			0x800, 100,
+			true, LIBTIER0_BIN
 		},
 		// 13: CTriggerCamera::FollowTarget: Don't early return when the player handle is null
 		{
@@ -821,13 +815,12 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x0F\x84\xD6\x02\x00\x00\x83\xFA\xFF",
 			"xxxxxxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x83\xFA\xFF",
-			"cstrike/bin/server_srv.so"
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\x0F\x84\xFF\x02\x00\x00\x83\xFA\xFF",
 			"xxxxxxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x83\xFA\xFF",
-			"cstrike/bin/linux64/server_srv.so"
 #endif
+			SERVER_BIN
 		},
 		// 14: CGameMovement::LadderMove NOP out player->SetGravity( 0 );
 		// This is in a cloned function with a local symbol (_ZN13CGameMovement10LadderMoveEv.part.0), so use the preceding exported function as the scan anchor.
@@ -837,13 +830,12 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\xC7\x86\xA4\x02\x00\x00\x00\x00\x00\x00",
 			"xxxxxxxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
-			"cstrike/bin/server_srv.so",
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\x41\xC7\x84\x24\x98\x03\x00\x00\x00\x00",
 			"xxxx????xx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
-			"cstrike/bin/linux64/server_srv.so",
 #endif
+			SERVER_BIN,
 			0x600
 		},
 		// 15: void CBaseGrenade::Explode( trace_t *pTrace, int bitsDamageType ) NOP out UTIL_DecalTrace( pTrace, "Scorch" ); to stop grenades from causing
@@ -854,13 +846,12 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\xE8\x2A\x2A\x2A\x2A\x83\xC4\x10\x6A\x00\x6A\x00",
 			"x????xxxxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x83\xC4\x10\x6A\x00\x6A\x00",
-			"cstrike/bin/server_srv.so"
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\xE8\x2A\x2A\x2A\x2A\x4C\x89\xE7\x31\xD2\x66\x0F\xEF\xC0",
 			"x????xxxxxxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x4C\x89\xE7\x31\xD2\x66\x0F\xEF\xC0",
-			"cstrike/bin/linux64/server_srv.so"
 #endif
+			SERVER_BIN
 		},
 		// 16: void CPlantedC4::Explode( trace_t *pTrace, int bitsDamageType ) NOP out UTIL_DecalTrace( pTrace, "Scorch" ); same reason as 15.
 		{
@@ -870,28 +861,26 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\xE8\x72\xBE\xEB\xFF",
 			"xxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90",
-			"cstrike/bin/server_srv.so"
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\xE8\xD5\x06\xEB\xFF",
 			"xxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90",
-			"cstrike/bin/linux64/server_srv.so"
 #endif
+			SERVER_BIN
 		},
 		// 17: void CEnvExplosion::InputExplode( inputdata_t &inputdata ) NOP out UTIL_DecalTrace( &tr, "Scorch" ); same reason as 15.
 		{
 			"_ZN13CEnvExplosion12InputExplodeER11inputdata_t",
 #if defined KE_ARCH_X86
 			(unsigned char *)"\xE8\x2A\x2A\x2A\x2A\x8B\x83\x40\x01\x00\x00\x83\xC4\x10",
-			"x????xx????xx",
+			"x????xx????xxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x8B\x83\x40\x01\x00\x00\x83\xC4\x10",
-			"cstrike/bin/server_srv.so",
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\x4C\x89\xEF\xE8\x2A\x2A\x2A\x2A\x8B\x83\x0C\x02\x00\x00",
 			"xxxx????xxxx??",
-			(unsigned char *)"\x4C\x89\xEF\xE8\x90\x90\x90\x90\x8B\x83\x0C\x02\x00\x00",
-			"cstrike/bin/linux64/server_srv.so",
+			(unsigned char *)"\x4C\x89\xEF\x90\x90\x90\x90\x90\x8B\x83\x0C\x02\x00\x00",
 #endif
+			SERVER_BIN,
 			0x800,
 		}
 	};
@@ -905,13 +894,12 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x74\x57\x83\xEC\x0C\x53\xE8\xDE\x26\xCA\xFF\x83\xC4\x10\x83\xF8\x02\x0F\x84",
 			"x?xx?xx????xx?xx?xx",
 			(unsigned char *)"\xEB\x57\x83\xEC\x0C\x53\xE8\xDE\x26\xCA\xFF\x83\xC4\x10\x83\xF8\x02\x0F\x84",
-			"cstrike/bin/server_srv.so"
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\x74\x5E\x4C\x89\xE7\xE8\xBE\x67\xC8\xFF\x83\xF8\x02",
 			"x?xxxx????xxx",
-			(unsigned char *)"\xEB\x5E\x4C\x89\xE7\xE8\x90\x90\x90\x90\x83\xF8\x02",
-			"cstrike/bin/linux64/server_srv.so"
+			(unsigned char *)"\xEB\x5E\x4C\x89\xE7\x90\x90\x90\x90\x90\x83\xF8\x02",
 #endif
+			SERVER_BIN
 		});
 		gs_Patches.push_back({
 			// 3: don't check if we have T spawns
@@ -920,13 +908,12 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x74\x0A\x8B\x83\x94\x02\x00\x00\x85\xC0\x75\x4A\x83\xEC\x0C\x68\x08\x07\x94\x00\xE8\xB9\x49\x52\x00\x5A\x59",
 			"xxxx????xxx?xx?x????x????xx",
 			(unsigned char *)"\x75\x54\x8B\x83\x94\x02\x00\x00\x85\xC0\x75\x4A\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
-			"cstrike/bin/server_srv.so"
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\x74\x0A\x8B\x8F\xC8\x02\x00\x00\x85\xC9\x75\x4F\x48\x8D\x3D\x90\x75\x1F\x00\x31\xC0\xE8\x11\x02\xB3\xFF",
 			"xxxx????xxx?xxx????xxx????",
 			(unsigned char *)"\x75\x59\x8B\x8F\xC8\x02\x00\x00\x85\xC9\x75\x4F\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
-			"cstrike/bin/linux64/server_srv.so"
 #endif
+			SERVER_BIN
 		});
 
 		if (g_SvLogs->GetInt())
@@ -944,13 +931,12 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x3D\x80\x3E\x00\x00\x0F\x8F\x00\x00\x00\x00\x8D\x65",
 			"x????xx????xx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x8D\x65",
-			"cstrike/bin/server_srv.so"
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\x3D\x80\x3E\x00\x00\x0F\x8F\xF9\x00\x00\x00\x48\x83\xC4\x18",
 			"x????xx????xxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x48\x83\xC4\x18",
-			"cstrike/bin/linux64/server_srv.so"
 #endif
+			SERVER_BIN
 		});
 	}
 
@@ -963,13 +949,12 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x74\x16",
 			"xx",
 			(unsigned char *)"\xEB\x16",
-			"cstrike/bin/server_srv.so"
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\x74\x0F",
 			"xx",
 			(unsigned char *)"\xEB\x0F",
-			"cstrike/bin/linux64/server_srv.so"
 #endif
+			SERVER_BIN
 		});
 	}
 
@@ -1234,14 +1219,12 @@ uintptr_t FindFunctionCall(uintptr_t BaseAddr, uintptr_t Function, size_t MaxSiz
 		{
 #if defined KE_ARCH_X86
 			uintptr_t CallAddr = *reinterpret_cast<uint32_t *>(pMemory + i + 1);
-
-            CallAddr += reinterpret_cast<uintptr_t>(pMemory + i + 5);
+			CallAddr += reinterpret_cast<uintptr_t>(pMemory + i + 5);
 #elif defined KE_ARCH_X64
-            int32_t offset = *reinterpret_cast<int32_t *>(pMemory + i + 1);
-
-            uintptr_t CallAddr = reinterpret_cast<uintptr_t>(pMemory + i + 5) + offset;
+			int32_t offset = *reinterpret_cast<int32_t *>(pMemory + i + 1);
+			uintptr_t CallAddr = reinterpret_cast<uintptr_t>(pMemory + i + 5) + offset;
 #else
-			return 0x00;
+			#error "unsupported architecture"
 #endif
 			if (CallAddr == Function)
 				return (uintptr_t)(pMemory + i);
