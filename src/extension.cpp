@@ -881,7 +881,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x4C\x89\xEF\x90\x90\x90\x90\x90\x8B\x83\x0C\x02\x00\x00",
 #endif
 			SERVER_BIN,
-			0x800,
+			0x800
 		}
 	};
 
@@ -1208,6 +1208,31 @@ uintptr_t FindPattern(uintptr_t BaseAddr, const unsigned char *pData, const char
 	return 0x00;
 }
 
+uintptr_t ResolveThroughPLT(uintptr_t StubAddr)
+{
+	// For Function call patches, the address resolved from `dlopen` is not the same as the one that's manually calculated by calculating
+	// the address from the `E8` opcode.
+	// Therefore, what we get is the PLT Stub's address.
+	// So, we follow what that stub jumps to in the GOT table and retrieve the actual address of the function (Same as the one from `dlopen`)
+	unsigned char *p = reinterpret_cast<unsigned char *>(StubAddr);
+
+	// jmp *disp(GOT)  ->  FF 25 xx xx xx xx
+	if (p[0] == 0xFF && p[1] == 0x25)
+	{
+#if defined KE_ARCH_X86
+		uint32_t GotSlot = *reinterpret_cast<uint32_t *>(p + 2); // absolute addr32 (non-PIC)
+		return *reinterpret_cast<uint32_t *>(GotSlot);            // 4-byte pointer in the GOT
+#elif defined KE_ARCH_X64
+		int32_t offset = *reinterpret_cast<int32_t *>(p + 2);
+		uintptr_t GotSlot = reinterpret_cast<uintptr_t>(p + 6) + offset;
+		return *reinterpret_cast<uintptr_t *>(GotSlot);
+#endif
+	}
+
+	// No GOT jump address found...
+	return StubAddr;
+}
+
 uintptr_t FindFunctionCall(uintptr_t BaseAddr, uintptr_t Function, size_t MaxSize)
 {
 	unsigned char *pMemory;
@@ -1227,6 +1252,9 @@ uintptr_t FindFunctionCall(uintptr_t BaseAddr, uintptr_t Function, size_t MaxSiz
 			#error "unsupported architecture"
 #endif
 			if (CallAddr == Function)
+				return (uintptr_t)(pMemory + i);
+
+			if (ResolveThroughPLT(CallAddr) == Function)
 				return (uintptr_t)(pMemory + i);
 
 			i += 4;
