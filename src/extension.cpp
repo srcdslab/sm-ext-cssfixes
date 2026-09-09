@@ -130,6 +130,7 @@ struct SrcdsPatch
 	const unsigned char *pPatchSignature; // original opcode signature | function symbol for functionCall = true
 	const char *pPatchPattern; // pattern = x/?, ? = ignore signature
 	const unsigned char *pPatch; // replace with bytes
+	const char *pPatchApplyMask; // '+' = replace byte, '-' = keep original, This string's length has to be equal to pPatchPattern
 	const char *pLibrary; // library of function symbol pSignature
 
 	int range = 0x400; // search range: scan up to this many bytes for the signature
@@ -693,6 +694,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x0F\x82\xC4\x03\x00\x00\x83\xEC\x08\x6A\x10\x53\xE8\xF1\xFA\xF4\xFF",
 			"xx????xx?x?xx????",
 			(unsigned char *)"\x0F\x82\xC4\x03\x00\x00\x83\xEC\x08\x6A\x10\x53\x90\x90\x90\x90\x90",
+			"------------+++++",
 			"cstrike/bin/server_srv.so"
 		},
 		// 1: player_speedmod should not turn off flashlight
@@ -701,6 +703,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x0F\x85\x00\x00\x00\x00\x83\xEC\x0C\x57\xE8\x1D\xFF\xFF\xFF\x83\xC4\x10\x09\x83",
 			"xx????xx?xx????xx?xx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x83\xEC\x0C\x57\xE8\x1D\xFF\xFF\xFF\x83\xC4\x10\x09\x83",
+			"++++++--------------",
 			"cstrike/bin/server_srv.so"
 		},
 		// 5: disable alive check in point_viewcontrol->Disable
@@ -709,6 +712,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x0F\x84\x47\x02\x00\x00\xF6\x83\x40\x01\x00\x00\x20\x0F\x85",
 			"xx????xx?????xx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\xF6\x83\x40\x01\x00\x00\x20\x0F\x85",
+			"++++++---------",
 			"cstrike/bin/server_srv.so"
 		},
 		// 6: disable player->m_takedamage = DAMAGE_NO in point_viewcontrol->Enable
@@ -717,6 +721,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\xC6\x80\xFD\x00\x00\x00\x00\x8B\x83",
 			"xxxxxxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x8B\x83",
+			"+++++++--",
 			"cstrike/bin/server_srv.so",
 			0x600
 		},
@@ -726,6 +731,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x74\x1A\x8B\x16\x8B\x92\x08\x02\x00\x00\x81\xFA\xF0\x09\x2A\x00\x0F\x85",
 			"x?xxxx????xx????xx",
 			(unsigned char *)"\xEB\x1A\x8B\x16\x8B\x92\x08\x02\x00\x00\x81\xFA\xF0\x09\x2A\x00\x0F\x85",
+			"+-----------------",
 			"cstrike/bin/server_srv.so"
 		},
 		// 8: userinfo stringtable don't write fakeclient field
@@ -734,6 +740,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x88\x46\x6C",
 			"xxx",
 			(unsigned char *)"\x90\x90\x90",
+			"+++",
 			"bin/engine_srv.so"
 		},
 		// 10: fix server lagging resulting from too many ConMsgs due to packet spam
@@ -742,6 +749,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"_Z6ConMsgPKcz",
 			"xxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90",
+			"+++++",
 			"bin/engine_srv.so",
 			0x7d1, 100,
 			true, "bin/libtier0_srv.so"
@@ -752,6 +760,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"Msg",
 			"xxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90",
+			"+++++",
 			"bin/engine_srv.so",
 			0x800, 100,
 			true, "bin/libtier0_srv.so"
@@ -762,6 +771,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x0F\x84\xD6\x02\x00\x00\x83\xFA\xFF",
 			"xxxxxxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x83\xFA\xFF",
+			"++++++---",
 			"cstrike/bin/server_srv.so"
 		},
 		// 14: CGameMovement::LadderMove NOP out player->SetGravity( 0 );
@@ -771,6 +781,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\xC7\x86\xA4\x02\x00\x00\x00\x00\x00\x00",
 			"xxxxxxxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
+			"++++++++++",
 			"cstrike/bin/server_srv.so",
 			0x600
 		},
@@ -781,6 +792,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\xE8\xDA\x8E\x21\x00",
 			"xxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90",
+			"+++++",
 			"cstrike/bin/server_srv.so"
 		},
 		// 16: void CPlantedC4::Explode( trace_t *pTrace, int bitsDamageType ) NOP out UTIL_DecalTrace( pTrace, "Scorch" ); same reason as 15.
@@ -789,6 +801,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\xE8\x72\xBE\xEB\xFF",
 			"xxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90",
+			"+++++",
 			"cstrike/bin/server_srv.so"
 		},
 		// 17: void CEnvExplosion::InputExplode( inputdata_t &inputdata ) NOP out UTIL_DecalTrace( &tr, "Scorch" ); same reason as 15.
@@ -797,6 +810,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\xE8\xDA\x2A\x1A\x00",
 			"xxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90",
+			"+++++",
 			"cstrike/bin/server_srv.so",
 			0x800,
 			1
@@ -811,6 +825,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x74\x57\x83\xEC\x0C\x53\xE8\xDE\x26\xCA\xFF\x83\xC4\x10\x83\xF8\x02\x0F\x84",
 			"x?xx?xx????xx?xx?xx",
 			(unsigned char *)"\xEB\x57\x83\xEC\x0C\x53\xE8\xDE\x26\xCA\xFF\x83\xC4\x10\x83\xF8\x02\x0F\x84",
+			"+------------------",
 			"cstrike/bin/server_srv.so"
 		});
 		gs_Patches.push_back({
@@ -819,6 +834,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x74\x0A\x8B\x83\x94\x02\x00\x00\x85\xC0\x75\x4A\x83\xEC\x0C\x68\x08\x07\x94\x00\xE8\xB9\x49\x52\x00\x5A\x59",
 			"xxxx????xxx?xx?x????x????xx",
 			(unsigned char *)"\x75\x54\x8B\x83\x94\x02\x00\x00\x85\xC0\x75\x4A\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
+			"++----------+++++++++++++++",
 			"cstrike/bin/server_srv.so"
 		});
 
@@ -836,6 +852,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x3D\x80\x3E\x00\x00\x0F\x8F\x00\x00\x00\x00\x8D\x65",
 			"x????xx????xx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x8D\x65",
+			"+++++++++++--",
 			"cstrike/bin/server_srv.so"
 		});
 	}
@@ -848,6 +865,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x74\x16",
 			"xx",
 			(unsigned char *)"\xEB\x16",
+			"+-",
 			"cstrike/bin/server_srv.so"
 		});
 	}
@@ -857,6 +875,13 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	{
 		struct SrcdsPatch *pPatch = &gs_Patches[i];
 		int PatchLen = strlen(pPatch->pPatchPattern);
+
+		if (strlen(pPatch->pPatchApplyMask) != PatchLen)
+		{
+			g_pSM->LogError(myself, "Patch apply mask length does not match patch pattern length for symbol: %s", pPatch->pSignature);
+			bSuccess = false;
+			continue;
+		}
 
 #ifdef _WIN32
 		HMODULE pBinary = LoadLibrary(pPatch->pLibrary);
@@ -945,8 +970,11 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			SourceHook::SetMemAccess((void *)pPatchAddress, PatchLen, SH_MEM_READ|SH_MEM_WRITE|SH_MEM_EXEC);
 			for (int j = 0; j < PatchLen; j++)
 			{
-				pRestore->pOriginal[j] = *(unsigned char *)(pPatchAddress + j);
-				*(unsigned char *)(pPatchAddress + j) = pPatch->pPatch[j];
+				if (pPatch->pPatchApplyMask[j] == '+')
+				{
+					pRestore->pOriginal[j] = *(unsigned char *)(pPatchAddress + j);
+					*(unsigned char *)(pPatchAddress + j) = pPatch->pPatch[j];
+				}
 			}
 			SourceHook::SetMemAccess((void *)pPatchAddress, PatchLen, SH_MEM_READ|SH_MEM_EXEC);
 
@@ -1052,7 +1080,7 @@ void CSSFixes::SDK_OnUnload()
 		int PatchLen = strlen(pPatch->pPatchPattern);
 
 		SrcdsPatch::Restore *pRestore = pPatch->pRestore;
-		while(pRestore)
+		while (pRestore)
 		{
 			if (!pRestore->pOriginal)
 				break;
@@ -1060,7 +1088,10 @@ void CSSFixes::SDK_OnUnload()
 			SourceHook::SetMemAccess((void *)pRestore->pPatchAddress, PatchLen, SH_MEM_READ|SH_MEM_WRITE|SH_MEM_EXEC);
 			for (int j = 0; j < PatchLen; j++)
 			{
-				*(unsigned char *)(pRestore->pPatchAddress + j) = pRestore->pOriginal[j];
+				if (pPatch->pPatchApplyMask[j] == '+')
+				{
+					*(unsigned char *)(pRestore->pPatchAddress + j) = pRestore->pOriginal[j];
+				}
 			}
 			SourceHook::SetMemAccess((void *)pRestore->pPatchAddress, PatchLen, SH_MEM_READ|SH_MEM_EXEC);
 
