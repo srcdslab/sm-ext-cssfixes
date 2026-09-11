@@ -177,7 +177,8 @@ typedef bool (*ShouldHitFunc_t)( IHandleEntity *pHandleEntity, int contentsMask 
 
 uintptr_t FindPattern(uintptr_t BaseAddr, const unsigned char *pData, const char *pPattern, size_t MaxSize);
 uintptr_t FindFunctionCall(uintptr_t BaseAddr, uintptr_t Function, size_t MaxSize);
-uintptr_t FindFunctionAddressByPattern(uintptr_t StartAddr, size_t MaxSize);
+uintptr_t FindFunctionAddressByCall(uintptr_t CallAddr);
+uintptr_t FindPatchAnchorCall(const struct SrcdsPatch *pPatch, bool *pbAlreadyPatched);
 
 /**
  * @file extension.cpp
@@ -857,8 +858,9 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	{
 		struct SrcdsPatch *pPatch = &gs_Patches[i];
 
-		// PatchLen has to be the number of opcodes for a function call which is just E8 followed by 4 byes
-		int PatchLen = !pPatch->functionCall ? strlen(pPatch->pPatchPattern) : strlen(reinterpret_cast<const char*>(pPatch->pPatch));
+		// A function call patch always replaces a single CALL rel32, which is 5 bytes.
+		// strlen() must not be used on pPatch here: it is binary data, not a string.
+		int PatchLen = pPatch->functionCall ? 5 : (int)strlen(pPatch->pPatchPattern);
 
 #ifdef _WIN32
 		HMODULE pBinary = LoadLibrary(pPatch->pLibrary);
@@ -893,28 +895,56 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		// If it's a function call patch, resolve the target function address ONCE before applying patches
 		if (pPatch->functionCall)
 		{
-			uintptr_t startAddr = FindPattern(pPatch->pAddress, pPatch->pPatchSignature, pPatch->pPatchPattern, pPatch->range);
-			if (startAddr)
+			bool bAlreadyPatched = false;
+			uintptr_t anchorCall = FindPatchAnchorCall(pPatch, &bAlreadyPatched);
+
+			if (bAlreadyPatched)
 			{
-				functionAddress = FindFunctionAddressByPattern(startAddr, strlen(pPatch->pPatchPattern));
-				if (functionAddress && g_SvLogs->GetInt())
-					g_pSM->LogMessage(myself, "Found patched function address for symbol: %s (%p)", pPatch->pSignature, functionAddress);
+				// The engine still carries this patch from an earlier load that was never
+				// reverted. There is nothing left to do and nothing we could restore, so skip
+				// it instead of failing the load of every other fix in this extension.
+				g_pSM->LogMessage(myself, "Patch for symbol %s is already applied, skipping", pPatch->pSignature);
+				continue;
 			}
+
+			if (!anchorCall)
+			{
+				g_pSM->LogError(myself, "Could not find call pattern for symbol: %s in %s",
+					pPatch->pSignature, pPatch->pLibrary);
+				bSuccess = false;
+				continue;
+			}
+
+			functionAddress = FindFunctionAddressByCall(anchorCall);
+			if (!functionAddress)
+			{
+				g_pSM->LogError(myself, "Call pattern for symbol %s does not end on a CALL rel32 (%p)",
+					pPatch->pSignature, anchorCall);
+				bSuccess = false;
+				continue;
+			}
+
+			if (g_SvLogs->GetInt())
+				g_pSM->LogMessage(myself, "Found patched function address for symbol: %s (%p)", pPatch->pSignature, functionAddress);
 		}
 
 		uintptr_t ofs = 0;
 		int found;
 		for (found = 0; found < pPatch->occurrences; found++)
 		{
+			// pPatch->range is an int while ofs is unsigned, so "range - ofs" wraps into a
+			// multi-gigabyte scan as soon as ofs overshoots range. A match found in the last
+			// bytes of the range is enough to overshoot it, after which the search runs far
+			// past the function and NOPs call sites in unrelated engine code.
+			if (ofs >= (uintptr_t)pPatch->range)
+				break;
+
 			uintptr_t pPatchAddress = 0x00;
 			if (pPatch->functionCall)
 			{
-				if (functionAddress)
-				{
-					pPatchAddress = FindFunctionCall(pPatch->pAddress + ofs, functionAddress, pPatch->range - ofs);
-					if (pPatchAddress && g_SvLogs->GetInt())
-						g_pSM->LogMessage(myself, "Found occurence (%d) function call for symbol: %s (%p)", found, pPatch->pSignature, pPatchAddress);
-				}
+				pPatchAddress = FindFunctionCall(pPatch->pAddress + ofs, functionAddress, pPatch->range - ofs);
+				if (pPatchAddress && g_SvLogs->GetInt())
+					g_pSM->LogMessage(myself, "Found occurence (%d) function call for symbol: %s (%p)", found, pPatch->pSignature, pPatchAddress);
 			}
 			else
 				pPatchAddress = FindPattern(pPatch->pAddress + ofs, pPatch->pPatchSignature, pPatch->pPatchPattern, pPatch->range - ofs);
@@ -926,7 +956,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 
 				g_pSM->LogError(myself, "Could not find patch signature for symbol: %s", pPatch->pSignature);
 				bSuccess = false;
-				continue;
+				break;
 			}
 			ofs = pPatchAddress - pPatch->pAddress + PatchLen;
 
@@ -1043,7 +1073,7 @@ void CSSFixes::SDK_OnUnload()
 	for (size_t i = 0; i < gs_Patches.size(); i++)
 	{
 		struct SrcdsPatch *pPatch = &gs_Patches[i];
-		int PatchLen = !pPatch->functionCall ? strlen(pPatch->pPatchPattern) : strlen(reinterpret_cast<const char*>(pPatch->pPatch));
+		int PatchLen = pPatch->functionCall ? 5 : (int)strlen(pPatch->pPatchPattern);
 
 		SrcdsPatch::Restore *pRestore = pPatch->pRestore;
 		while(pRestore)
@@ -1065,6 +1095,9 @@ void CSSFixes::SDK_OnUnload()
 			pRestore = pRestore->pNext;
 			free(freeMe);
 		}
+
+		// The list is gone, don't leave the head dangling into freed memory.
+		pPatch->pRestore = NULL;
 	}
 }
 
@@ -1119,16 +1152,56 @@ uintptr_t FindFunctionCall(uintptr_t BaseAddr, uintptr_t Function, size_t MaxSiz
 	return 0x00;
 }
 
-uintptr_t FindFunctionAddressByPattern(uintptr_t StartAddr, size_t MaxSize)
+uintptr_t FindFunctionAddressByCall(uintptr_t CallAddr)
 {
-	// Find the E8 opcode so we can calculate the desired function's address.
-	// The E8 opcode and what follows it (The 4 bytes) have to be at the end of the pattern.
-	uintptr_t E8Addr = StartAddr + (MaxSize - 5);
-
-	// Just a safety chekc
-	if (*reinterpret_cast<unsigned char *>(E8Addr) != 0xE8)
+	if (*reinterpret_cast<unsigned char *>(CallAddr) != 0xE8)
 		return 0x00;
 
-	uint32_t offset = *reinterpret_cast<int32_t *>(E8Addr + 1);
-	return E8Addr + 5 + offset;
+	// CALL rel32: the operand is relative to the instruction following the call.
+	int32_t Offset = *reinterpret_cast<int32_t *>(CallAddr + 1);
+	return CallAddr + 5 + Offset;
+}
+
+// Locate the CALL instruction a function call patch anchors on.
+//
+// The pattern has to end on the CALL (E8 rel32) that gets NOPed out, because its rel32 operand
+// is what identifies the callee. That also means the patch destroys its own signature: once it
+// has been applied those five bytes read as 90 90 90 90 90 and the pattern can never match
+// again in that process. Look for the patched form as well, so a load that runs against an
+// engine which is still patched can tell "already applied" apart from "stale signature"
+// instead of failing and taking every other fix in this extension down with it.
+uintptr_t FindPatchAnchorCall(const SrcdsPatch *pPatch, bool *pbAlreadyPatched)
+{
+	const size_t PatternLen = strlen(pPatch->pPatchPattern);
+
+	*pbAlreadyPatched = false;
+
+	// E8 + rel32
+	if (PatternLen < 5)
+		return 0x00;
+
+	uintptr_t StartAddr = FindPattern(pPatch->pAddress, pPatch->pPatchSignature, pPatch->pPatchPattern, pPatch->range);
+	if (StartAddr)
+		return StartAddr + (PatternLen - 5);
+
+	unsigned char Signature[64];
+	char Pattern[sizeof(Signature) + 1];
+
+	if (PatternLen > sizeof(Signature))
+		return 0x00;
+
+	memcpy(Signature, pPatch->pPatchSignature, PatternLen);
+	memcpy(Pattern, pPatch->pPatchPattern, PatternLen);
+	Pattern[PatternLen] = '\0';
+
+	for (size_t i = PatternLen - 5; i < PatternLen; i++)
+	{
+		Signature[i] = 0x90;
+		Pattern[i] = 'x';
+	}
+
+	if (FindPattern(pPatch->pAddress, Signature, Pattern, pPatch->range))
+		*pbAlreadyPatched = true;
+
+	return 0x00;
 }
