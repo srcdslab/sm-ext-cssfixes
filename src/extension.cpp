@@ -193,7 +193,7 @@ typedef bool (*ShouldHitFunc_t)( IHandleEntity *pHandleEntity, int contentsMask 
 
 uintptr_t FindPattern(uintptr_t BaseAddr, const unsigned char *pData, const char *pPattern, size_t MaxSize);
 uintptr_t FindFunctionCall(uintptr_t BaseAddr, uintptr_t Function, size_t MaxSize);
-
+uintptr_t FindFunctionAddressByPattern(uintptr_t StartAddr, size_t MaxSize);
 
 /**
  * @file extension.cpp
@@ -791,22 +791,22 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		// 10: fix server lagging resulting from too many ConMsgs due to packet spam
 		{
 			"_ZN8CNetChan19ProcessPacketHeaderEP11netpacket_s",
-			(unsigned char *)"_Z6ConMsgPKcz",
-			"xxxxx",
+			(unsigned char *)"\x8B\x45\x08\x05\xA0\x2A\x2A\x2A\xFF\x75\xC8\x53\x50\x68\x2A\x2A\x2A\x2A\xE8\x2A\x2A\x2A\x2A", // Pattern for first ConMsg call.
+			"xxxxx???xxxxxx????x????",
 			(unsigned char *)"\x90\x90\x90\x90\x90",
 			ENGINE_BIN,
 			0x7d1, 100,
-			true, LIBTIER0_BIN
+			true
 		},
 		// 11: fix server lagging resulting from too many ConMsgs due to packet spam
 		{
 			"_Z11NET_GetLongiP11netpacket_s",
-			(unsigned char *)"Msg",
-			"xxxxx",
+			(unsigned char *)"\x83\xC4\x0C\x50\xFF\xB6\x2A\x2A\x2A\x2A\x68\x2A\x2A\x2A\x2A\xE8\x2A\x2A\x2A\x2A", // Pattern for first Msg call.
+			"xxxxxx????x????x????",
 			(unsigned char *)"\x90\x90\x90\x90\x90",
 			ENGINE_BIN,
 			0x800, 100,
-			true, LIBTIER0_BIN
+			true
 		},
 		// 13: CTriggerCamera::FollowTarget: Don't early return when the player handle is null
 		{
@@ -962,7 +962,9 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	for (size_t i = 0; i < gs_Patches.size(); i++)
 	{
 		struct SrcdsPatch *pPatch = &gs_Patches[i];
-		int PatchLen = strlen(pPatch->pPatchPattern);
+
+		// PatchLen has to be the number of opcodes for a function call which is just E8 followed by 4 byes
+		int PatchLen = !pPatch->functionCall ? strlen(pPatch->pPatchPattern) : strlen(reinterpret_cast<const char*>(pPatch->pPatch));
 
 		void *pBinary = dlopen(pPatch->pLibrary, RTLD_NOW);
 		if (!pBinary)
@@ -986,26 +988,17 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 
 		SrcdsPatch::Restore **ppRestore = &pPatch->pRestore;
 
+		uintptr_t functionAddress = 0x00; // For patches that NOP function calls.
+
+		// If it's a function call patch, resolve the target function address ONCE before applying patches
 		if (pPatch->functionCall)
 		{
-			void* pFunctionBinary = dlopen(pPatch->pFunctionLibrary, RTLD_NOW);
-			if (!pFunctionBinary)
+			uintptr_t startAddr = FindPattern(pPatch->pAddress, pPatch->pPatchSignature, pPatch->pPatchPattern, pPatch->range);
+			if (startAddr)
 			{
-				g_pSM->LogError(myself, "Could not dlopen %s", pPatch->pFunctionLibrary);
-				bSuccess = false;
-				continue;
-			}
-
-			pPatch->pSignatureAddress = (uintptr_t)memutils->ResolveSymbol(pFunctionBinary, (char *)pPatch->pPatchSignature);
-
-			dlclose(pFunctionBinary);
-
-			if (!pPatch->pSignatureAddress)
-			{
-				g_pSM->LogError(myself, "Could not find patch signature symbol: %s in %s (%p)",
-					(char *)pPatch->pPatchSignature, pPatch->pFunctionLibrary, pFunctionBinary);
-				bSuccess = false;
-				continue;
+				functionAddress = FindFunctionAddressByPattern(startAddr, strlen(pPatch->pPatchPattern));
+				if (functionAddress && g_SvLogs->GetInt())
+					g_pSM->LogMessage(myself, "Found patched function address for symbol: %s (%p)", pPatch->pSignature, functionAddress);
 			}
 		}
 
@@ -1013,9 +1006,16 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		int found;
 		for (found = 0; found < pPatch->occurrences; found++)
 		{
-			uintptr_t pPatchAddress;
+			uintptr_t pPatchAddress = 0x00;
 			if (pPatch->functionCall)
-				pPatchAddress = FindFunctionCall(pPatch->pAddress + ofs, pPatch->pSignatureAddress, pPatch->range - ofs);
+			{
+				if (functionAddress)
+				{
+					pPatchAddress = FindFunctionCall(pPatch->pAddress + ofs, functionAddress, pPatch->range - ofs);
+					if (pPatchAddress && g_SvLogs->GetInt())
+						g_pSM->LogMessage(myself, "Found occurence (%d) function call for symbol: %s (%p)", found, pPatch->pSignature, pPatchAddress);
+				}
+			}
 			else
 				pPatchAddress = FindPattern(pPatch->pAddress + ofs, pPatch->pPatchSignature, pPatch->pPatchPattern, pPatch->range - ofs);
 
@@ -1143,7 +1143,7 @@ void CSSFixes::SDK_OnUnload()
 	for (size_t i = 0; i < gs_Patches.size(); i++)
 	{
 		struct SrcdsPatch *pPatch = &gs_Patches[i];
-		int PatchLen = strlen(pPatch->pPatchPattern);
+		int PatchLen = !pPatch->functionCall ? strlen(pPatch->pPatchPattern) : strlen(reinterpret_cast<const char*>(pPatch->pPatch));
 
 		SrcdsPatch::Restore *pRestore = pPatch->pRestore;
 		while(pRestore)
@@ -1196,31 +1196,6 @@ uintptr_t FindPattern(uintptr_t BaseAddr, const unsigned char *pData, const char
 	return 0x00;
 }
 
-uintptr_t ResolveThroughPLT(uintptr_t StubAddr)
-{
-	// For Function call patches, the address resolved from `dlopen` is not the same as the one that's manually calculated by calculating
-	// the address from the `E8` opcode.
-	// Therefore, what we get is the PLT Stub's address.
-	// So, we follow what that stub jumps to in the GOT table and retrieve the actual address of the function (Same as the one from `dlopen`)
-	unsigned char *p = reinterpret_cast<unsigned char *>(StubAddr);
-
-	// jmp *disp(GOT)  ->  FF 25 xx xx xx xx
-	if (p[0] == 0xFF && p[1] == 0x25)
-	{
-#if defined KE_ARCH_X86
-		uint32_t GotSlot = *reinterpret_cast<uint32_t *>(p + 2); // absolute addr32 (non-PIC)
-		return *reinterpret_cast<uint32_t *>(GotSlot);            // 4-byte pointer in the GOT
-#elif defined KE_ARCH_X64
-		int32_t offset = *reinterpret_cast<int32_t *>(p + 2);
-		uintptr_t GotSlot = reinterpret_cast<uintptr_t>(p + 6) + offset;
-		return *reinterpret_cast<uintptr_t *>(GotSlot);
-#endif
-	}
-
-	// No GOT jump address found...
-	return StubAddr;
-}
-
 uintptr_t FindFunctionCall(uintptr_t BaseAddr, uintptr_t Function, size_t MaxSize)
 {
 	unsigned char *pMemory;
@@ -1242,12 +1217,23 @@ uintptr_t FindFunctionCall(uintptr_t BaseAddr, uintptr_t Function, size_t MaxSiz
 			if (CallAddr == Function)
 				return (uintptr_t)(pMemory + i);
 
-			if (ResolveThroughPLT(CallAddr) == Function)
-				return (uintptr_t)(pMemory + i);
-
 			i += 4;
 		}
 	}
 
 	return 0x00;
+}
+
+uintptr_t FindFunctionAddressByPattern(uintptr_t StartAddr, size_t MaxSize)
+{
+	// Find the E8 opcode so we can calculate the desired function's address.
+	// The E8 opcode and what follows it (The 4 bytes) have to be at the end of the pattern.
+	uintptr_t E8Addr = StartAddr + (MaxSize - 5);
+
+	// Just a safety chekc
+	if (*reinterpret_cast<unsigned char *>(E8Addr) != 0xE8)
+		return 0x00;
+
+	uint32_t offset = *reinterpret_cast<int32_t *>(E8Addr + 1);
+	return E8Addr + 5 + offset;
 }
