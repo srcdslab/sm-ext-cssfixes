@@ -791,8 +791,13 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		// 10: fix server lagging resulting from too many ConMsgs due to packet spam
 		{
 			"_ZN8CNetChan19ProcessPacketHeaderEP11netpacket_s",
+#if defined KE_ARCH_X86
 			(unsigned char *)"\x8B\x45\x08\x05\xA0\x2A\x2A\x2A\xFF\x75\xC8\x53\x50\x68\x2A\x2A\x2A\x2A\xE8\x2A\x2A\x2A\x2A", // Pattern for first ConMsg call.
 			"xxxxx???xxxxxx????x????",
+#elif defined KE_ARCH_X64
+			(unsigned char *)"\x31\xC0\x44\x89\x4D\xAC\x44\x89\x55\xB8\x44\x89\x45\xB0\xE8\x2A\x2A\x2A\x2A", // Pattern for first ConMsg call.
+			"xxxxxxxxxxxxxxx????",
+#endif
 			(unsigned char *)"\x90\x90\x90\x90\x90",
 			ENGINE_BIN,
 			0x7d1, 100,
@@ -801,8 +806,13 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		// 11: fix server lagging resulting from too many ConMsgs due to packet spam
 		{
 			"_Z11NET_GetLongiP11netpacket_s",
+#if defined KE_ARCH_X86
 			(unsigned char *)"\x83\xC4\x0C\x50\xFF\xB6\x2A\x2A\x2A\x2A\x68\x2A\x2A\x2A\x2A\xE8\x2A\x2A\x2A\x2A", // Pattern for first Msg call.
 			"xxxxxx????x????x????",
+#elif defined KE_ARCH_X64
+			(unsigned char *)"\xE8\x2A\x2A\x2A\x2A\x41\x8B\x2A\x2A\x2A\x2A\x2A\x48\x8D\x2A\x2A\x2A\x2A\x2A\x48\x89\xC2\x31\xC0\xE8\x2A\x2A\x2A\x2A", // Pattern for first Msg call.
+			"x????xx?????xx?????xxxxxx????",
+#endif
 			(unsigned char *)"\x90\x90\x90\x90\x90",
 			ENGINE_BIN,
 			0x800, 100,
