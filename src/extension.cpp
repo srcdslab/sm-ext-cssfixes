@@ -778,7 +778,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		// "Too many indices for index buffer. Tell a programmer". Grenades cause decals on too many faces for the client to handle.
 		{
 			"_ZN12CBaseGrenade7ExplodeEP10CGameTracei",
-			(unsigned char *)"\xE8\xDA\x8E\x21\x00",
+			(unsigned char *)"\xE8\xEA\x8E\x21\x00",
 			"xxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90",
 			"cstrike/bin/server_srv.so"
@@ -794,7 +794,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		// 17: void CEnvExplosion::InputExplode( inputdata_t &inputdata ) NOP out UTIL_DecalTrace( &tr, "Scorch" ); same reason as 15.
 		{
 			"_ZN13CEnvExplosion12InputExplodeER11inputdata_t",
-			(unsigned char *)"\xE8\xDA\x2A\x1A\x00",
+			(unsigned char *)"\xE8\xEA\x2A\x1A\x00",
 			"xxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90",
 			"cstrike/bin/server_srv.so",
