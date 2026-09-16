@@ -774,7 +774,19 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			"cstrike/bin/server_srv.so",
 			0x600
 		},
-		// 15: void CBaseGrenade::Explode( trace_t *pTrace, int bitsDamageType ) NOP out UTIL_DecalTrace( pTrace, "Scorch" ); to stop grenades from causing
+		// 15: bool CZipPackFile::Prepare( int64 fileLen, int64 nFileOfs )
+		// NOPs out lookup.m_hFileName = m_fs->FindOrAddFileName( tmpString ); Line 768
+		// stop the errors CUtlLinkedList overflow! (exhausted memory allocator) and CUtlLinkedList overflow! (exhausted index range)
+		// this avoids crashing due to loading over 65k strings into stringpool. Custom assets in maps lead towards the limit. jenz- December 2023
+		{
+			"_ZN12CZipPackFile7PrepareExx",
+			(unsigned char *)"\x8B\x10\x57\x50\xFF\x92\x8C\x00\x00\x00",
+			"xxxxxxxxxx",
+			(unsigned char *)"\x8B\x10\x57\x50\x31\xC0\x90\x90\x90\x90",
+			"bin/dedicated_srv.so",
+			0x600
+		},
+		// 16: void CBaseGrenade::Explode( trace_t *pTrace, int bitsDamageType ) NOP out UTIL_DecalTrace( pTrace, "Scorch" ); to stop grenades from causing
 		// "Too many indices for index buffer. Tell a programmer". Grenades cause decals on too many faces for the client to handle.
 		{
 			"_ZN12CBaseGrenade7ExplodeEP10CGameTracei",
@@ -783,7 +795,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x90\x90\x90\x90\x90",
 			"cstrike/bin/server_srv.so"
 		},
-		// 16: void CPlantedC4::Explode( trace_t *pTrace, int bitsDamageType ) NOP out UTIL_DecalTrace( pTrace, "Scorch" ); same reason as 15.
+		// 17: void CPlantedC4::Explode( trace_t *pTrace, int bitsDamageType ) NOP out UTIL_DecalTrace( pTrace, "Scorch" ); same reason as 16.
 		{
 			"_ZN10CPlantedC47ExplodeEP10CGameTracei",
 			(unsigned char *)"\xE8\x72\xBE\xEB\xFF",
@@ -791,7 +803,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x90\x90\x90\x90\x90",
 			"cstrike/bin/server_srv.so"
 		},
-		// 17: void CEnvExplosion::InputExplode( inputdata_t &inputdata ) NOP out UTIL_DecalTrace( &tr, "Scorch" ); same reason as 15.
+		// 18: void CEnvExplosion::InputExplode( inputdata_t &inputdata ) NOP out UTIL_DecalTrace( &tr, "Scorch" ); same reason as 16.
 		{
 			"_ZN13CEnvExplosion12InputExplodeER11inputdata_t",
 			(unsigned char *)"\xE8\xEA\x2A\x1A\x00",
