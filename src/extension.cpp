@@ -786,6 +786,14 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			"bin/dedicated_srv.so",
 			0x600
 		},
+		// 16: Remove weird filename handle check in CZipPackFile::GetFileInfo that broke loading mixed case files in bsp pakfiles
+		{
+			"_ZN12CZipPackFile11GetFileInfoEPKcRiRxS2_S2_Rt",
+			(unsigned char *)"\x75\x00\x8B\x09",
+			"x?xx",
+			(unsigned char *)"\x90\x90\x8B\x09",
+			"bin/dedicated_srv.so"
+		},
 		// 16: void CBaseGrenade::Explode( trace_t *pTrace, int bitsDamageType ) NOP out UTIL_DecalTrace( pTrace, "Scorch" ); to stop grenades from causing
 		// "Too many indices for index buffer. Tell a programmer". Grenades cause decals on too many faces for the client to handle.
 		{
