@@ -830,10 +830,10 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		// 19: void CEnvExplosion::InputExplode( inputdata_t &inputdata ) NOP out UTIL_DecalTrace( &tr, "Scorch" ); same reason as 17.
 		{
 			"_ZN13CEnvExplosion12InputExplodeER11inputdata_t",
-			(unsigned char *)"\xE8\x2A\x2A\x2A\x2A\x8B\x83\x40\x01\x00\x00\x83\xC4\x10",
-			"x????xx????xxx",
-			(unsigned char *)"\x90\x90\x90\x90\x90\x8B\x83\x40\x01\x00\x00\x83\xC4\x10",
-			"+++++---------",
+			(unsigned char *)"\x68\x2A\x2A\x2A\x2A\x56\xE8\x2A\x2A\x2A\x2A\x8B\x83\x2A\x2A\x2A\x2A\x83\xC4\x10\xE9",
+			"x????xx????xx????xxxx",
+			(unsigned char *)"\x68\xF0\xB4\x8A\x00\x56\x90\x90\x90\x90\x90\x8B\x83\x40\x01\x00\x00\x83\xC4\x10\xE9",
+			"------+++++----------",
 			"cstrike/bin/server_srv.so",
 			0x800,
 			1
