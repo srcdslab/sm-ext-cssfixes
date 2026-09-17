@@ -786,7 +786,16 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			"bin/dedicated_srv.so",
 			0x600
 		},
-		// 16: void CBaseGrenade::Explode( trace_t *pTrace, int bitsDamageType ) NOP out UTIL_DecalTrace( pTrace, "Scorch" ); to stop grenades from causing
+		// 16: Remove filename handle check in CZipPackFile::GetFileInfo that breaks loading mixed case files in bsp pakfiles
+		// This is patched in conjunction with patch 15 to prevent physics collisions from not being loaded
+		{
+			"_ZN12CZipPackFile11GetFileInfoEPKcRiRxS2_S2_Rt",
+			(unsigned char *)"\x75\x00\x8B\x09",
+			"x?xx",
+			(unsigned char *)"\x90\x90\x8B\x09",
+			"bin/dedicated_srv.so"
+		},
+		// 17: void CBaseGrenade::Explode( trace_t *pTrace, int bitsDamageType ) NOP out UTIL_DecalTrace( pTrace, "Scorch" ); to stop grenades from causing
 		// "Too many indices for index buffer. Tell a programmer". Grenades cause decals on too many faces for the client to handle.
 		{
 			"_ZN12CBaseGrenade7ExplodeEP10CGameTracei",
@@ -795,7 +804,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x90\x90\x90\x90\x90",
 			"cstrike/bin/server_srv.so"
 		},
-		// 17: void CPlantedC4::Explode( trace_t *pTrace, int bitsDamageType ) NOP out UTIL_DecalTrace( pTrace, "Scorch" ); same reason as 16.
+		// 18: void CPlantedC4::Explode( trace_t *pTrace, int bitsDamageType ) NOP out UTIL_DecalTrace( pTrace, "Scorch" ); same reason as 17.
 		{
 			"_ZN10CPlantedC47ExplodeEP10CGameTracei",
 			(unsigned char *)"\xE8\x72\xBE\xEB\xFF",
@@ -803,7 +812,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x90\x90\x90\x90\x90",
 			"cstrike/bin/server_srv.so"
 		},
-		// 18: void CEnvExplosion::InputExplode( inputdata_t &inputdata ) NOP out UTIL_DecalTrace( &tr, "Scorch" ); same reason as 16.
+		// 19: void CEnvExplosion::InputExplode( inputdata_t &inputdata ) NOP out UTIL_DecalTrace( &tr, "Scorch" ); same reason as 17.
 		{
 			"_ZN13CEnvExplosion12InputExplodeER11inputdata_t",
 			(unsigned char *)"\xE8\xEA\x2A\x1A\x00",
