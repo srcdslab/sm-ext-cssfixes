@@ -130,7 +130,7 @@ struct SrcdsPatch
 	const unsigned char *pPatchSignature; // original opcode signature | function symbol for functionCall = true
 	const char *pPatchPattern; // pattern = x/?, ? = ignore signature
 	const unsigned char *pPatch; // replace with bytes
-	const char *pPatchApplyMask; // '+' = replace byte, '-' = keep original, This string's length has to be equal to pPatchPattern
+	const char *pPatchApplyMask; // '+' = replace byte, '-' = keep original. Length must equal strlen(pPatchPattern), or strlen(pPatch) when functionCall = true
 	const char *pLibrary; // library of function symbol pSignature
 
 	int range = 0x400; // search range: scan up to this many bytes for the signature
@@ -901,9 +901,26 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		// PatchLen has to be the number of opcodes for a function call which is just E8 followed by 4 byes
 		int PatchLen = !pPatch->functionCall ? strlen(pPatch->pPatchPattern) : strlen(reinterpret_cast<const char*>(pPatch->pPatch));
 
-		if (strlen(pPatch->pPatchApplyMask) != PatchLen)
+		if ((int)strlen(pPatch->pPatchApplyMask) != PatchLen)
 		{
 			g_pSM->LogError(myself, "Patch apply mask length does not match patch pattern length for symbol: %s", pPatch->pSignature);
+			bSuccess = false;
+			continue;
+		}
+
+		bool bValidMask = true;
+		for (int j = 0; j < PatchLen; j++)
+		{
+			if (pPatch->pPatchApplyMask[j] != '+' && pPatch->pPatchApplyMask[j] != '-')
+			{
+				bValidMask = false;
+				break;
+			}
+		}
+
+		if (!bValidMask)
+		{
+			g_pSM->LogError(myself, "Patch apply mask contains invalid characters (expected only '+' or '-') for symbol: %s", pPatch->pSignature);
 			bSuccess = false;
 			continue;
 		}
