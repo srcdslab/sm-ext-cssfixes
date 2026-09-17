@@ -794,6 +794,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x8B\x10\x57\x50\xFF\x92\x8C\x00\x00\x00",
 			"xxxxxxxxxx",
 			(unsigned char *)"\x8B\x10\x57\x50\x31\xC0\x90\x90\x90\x90",
+			"----++++++",
 			"bin/dedicated_srv.so",
 			0x600
 		},
@@ -804,6 +805,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x75\x00\x8B\x09",
 			"x?xx",
 			(unsigned char *)"\x90\x90\x8B\x09",
+			"++--",
 			"bin/dedicated_srv.so"
 		},
 		// 17: void CBaseGrenade::Explode( trace_t *pTrace, int bitsDamageType ) NOP out UTIL_DecalTrace( pTrace, "Scorch" ); to stop grenades from causing
