@@ -812,28 +812,28 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		// "Too many indices for index buffer. Tell a programmer". Grenades cause decals on too many faces for the client to handle.
 		{
 			"_ZN12CBaseGrenade7ExplodeEP10CGameTracei",
-			(unsigned char *)"\xE8\xEA\x8E\x21\x00",
-			"xxxxx",
-			(unsigned char *)"\x90\x90\x90\x90\x90",
-			"+++++",
+			(unsigned char *)"\xE8\x2A\x2A\x2A\x2A\x83\xC4\x10\x6A\x00\x6A\x00",
+			"x????xxxxxxx",
+			(unsigned char *)"\x90\x90\x90\x90\x90\x83\xC4\x10\x6A\x00\x6A\x00",
+			"+++++-------",
 			"cstrike/bin/server_srv.so"
 		},
 		// 18: void CPlantedC4::Explode( trace_t *pTrace, int bitsDamageType ) NOP out UTIL_DecalTrace( pTrace, "Scorch" ); same reason as 17.
 		{
 			"_ZN10CPlantedC47ExplodeEP10CGameTracei",
-			(unsigned char *)"\xE8\x72\xBE\xEB\xFF",
-			"xxxxx",
-			(unsigned char *)"\x90\x90\x90\x90\x90",
-			"+++++",
+			(unsigned char *)"\xE8\x2A\x2A\x2A\x2A\x8B\x45\x0C\x83\xC4\x0C\x6A\x00\x6A\x00",
+			"x????xxxxxxxxxx",
+			(unsigned char *)"\x90\x90\x90\x90\x90\x8B\x45\x0C\x83\xC4\x0C\x6A\x00\x6A\x00",
+			"+++++----------",
 			"cstrike/bin/server_srv.so"
 		},
 		// 19: void CEnvExplosion::InputExplode( inputdata_t &inputdata ) NOP out UTIL_DecalTrace( &tr, "Scorch" ); same reason as 17.
 		{
 			"_ZN13CEnvExplosion12InputExplodeER11inputdata_t",
-			(unsigned char *)"\xE8\xEA\x2A\x1A\x00",
-			"xxxxx",
-			(unsigned char *)"\x90\x90\x90\x90\x90",
-			"+++++",
+			(unsigned char *)"\xE8\x2A\x2A\x2A\x2A\x8B\x83\x40\x01\x00\x00\x83\xC4\x10",
+			"x????xx????xxx",
+			(unsigned char *)"\x90\x90\x90\x90\x90\x8B\x83\x40\x01\x00\x00\x83\xC4\x10",
+			"+++++---------",
 			"cstrike/bin/server_srv.so",
 			0x800,
 			1
