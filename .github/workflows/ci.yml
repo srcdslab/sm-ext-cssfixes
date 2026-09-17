@@ -17,3 +17,4 @@ jobs:
     uses: srcdslab/ci-workflows/.github/workflows/shared_build_release_am_extension.yml@v1
     with:
       sdks: "css"
+      os-list: '["ubuntu-24.04"]'
