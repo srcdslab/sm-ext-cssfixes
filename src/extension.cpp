@@ -906,7 +906,6 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			"++--",
 			DEDICATED_BIN
 		},
-#endif
 		// 17: void CBaseGrenade::Explode( trace_t *pTrace, int bitsDamageType ) NOP out UTIL_DecalTrace( pTrace, "Scorch" ); to stop grenades from causing
 		// "Too many indices for index buffer. Tell a programmer". Grenades cause decals on too many faces for the client to handle.
 		{
