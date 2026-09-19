@@ -873,23 +873,25 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		// NOPs out lookup.m_hFileName = m_fs->FindOrAddFileName( tmpString ); Line 768
 		// Stops both CUtlLinkedList overflow! (exhausted memory allocator) and CUtlLinkedList overflow! (exhausted index range) errors
 		// This avoids crashing due to loading over 65k strings into stringpool. Custom assets in maps lead towards the limit. jenz - December 2023
-		// TODO: no linux64 signature derived yet, x86-only until someone reverse-engineers one.
 		{
 			"_ZN12CZipPackFile7PrepareExx",
 #if defined KE_ARCH_X86
 			(unsigned char *)"\x8B\x10\x57\x50\xFF\x92\x8C\x00\x00\x00",
-			"xxxxxxxxxx",
+			"xxxxxx????",
 			(unsigned char *)"\x8B\x10\x57\x50\x31\xC0\x90\x90\x90\x90",
 			"----++++++",
 #elif defined KE_ARCH_X64
-
+			(unsigned char *)"\x4C\x89\xF6\x48\x8B\x07\xFF\x90\x2A\x2A\x2A\x2A",
+			"xxxxxxxx????",
+			(unsigned char *)"\x4C\x89\xF6\x48\x8B\x07\x48\x31\xC0\x90\x90\x90",
+			"------++++++",
 #endif
 			DEDICATED_BIN,
 			0x600
 		},
 		// 16: Remove filename handle check in CZipPackFile::GetFileInfo that breaks loading mixed case files in bsp pakfiles
 		// This is patched in conjunction with patch 15 to prevent physics collisions from not being loaded
-		// TODO: no linux64 signature derived yet, x86-only until someone reverse-engineers one.
+		// Both Linux32 and Linux64 have the same instructions used here.
 		{
 			"_ZN12CZipPackFile11GetFileInfoEPKcRiRxS2_S2_Rt",
 			(unsigned char *)"\x75\x00\x8B\x09",
