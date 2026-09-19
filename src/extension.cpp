@@ -667,6 +667,12 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	g_pDetour_FireBullets->EnableDetour();
 	g_pDetour_SwingOrStab->EnableDetour();
 
+	// The offset between the vtable address of a class and the first function is 8 in x86 and 16 in x64
+	int vtable_offset = 8;
+#if defined KE_ARCH_X64
+	vtable_offset = 16;
+#endif
+
 	// Find VTable for CTraceFilterSkipTwoEntities
 	uintptr_t pCTraceFilterSkipTwoEntities;
 	if (!g_pGameConf->GetMemSig("CTraceFilterSkipTwoEntities", (void **)(&pCTraceFilterSkipTwoEntities)) || !pCTraceFilterSkipTwoEntities)
@@ -676,7 +682,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		return false;
 	}
 	// First function in VTable
-	g_CTraceFilterSkipTwoEntities = (CTraceFilterSkipTwoEntities *)(pCTraceFilterSkipTwoEntities + 8);
+	g_CTraceFilterSkipTwoEntities = (CTraceFilterSkipTwoEntities *)(pCTraceFilterSkipTwoEntities + vtable_offset);
 
 	// Find VTable for CTraceFilterSimple
 	uintptr_t pCTraceFilterSimple;
@@ -687,7 +693,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		return false;
 	}
 	// First function in VTable
-	g_CTraceFilterSimple = (CTraceFilterSimple *)(pCTraceFilterSimple + 8);
+	g_CTraceFilterSimple = (CTraceFilterSimple *)(pCTraceFilterSimple + vtable_offset);
 
 	// Find VTable for CTraceFilterNoNPCsOrPlayer
 	uintptr_t pCTraceFilterNoNPCsOrPlayer;
@@ -698,7 +704,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		return false;
 	}
 	// First function in VTable
-	g_CTraceFilterNoNPCsOrPlayer = pCTraceFilterNoNPCsOrPlayer + 8;
+	g_CTraceFilterNoNPCsOrPlayer = pCTraceFilterNoNPCsOrPlayer + vtable_offset;
 
 	g_SH_SkipTwoEntitiesShouldHitEntity = SH_ADD_DVPHOOK(CTraceFilterSkipTwoEntities, ShouldHitEntity, g_CTraceFilterSkipTwoEntities, SH_STATIC(ShouldHitEntity), true);
 	g_SH_SimpleShouldHitEntity = SH_ADD_DVPHOOK(CTraceFilterSimple, ShouldHitEntity, g_CTraceFilterSimple, SH_STATIC(ShouldHitEntity), true);
