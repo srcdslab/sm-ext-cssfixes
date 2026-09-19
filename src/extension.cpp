@@ -53,10 +53,12 @@
 		#define SERVER_BIN 		"cstrike/bin/server_srv.so"
 		#define ENGINE_BIN 		"bin/engine_srv.so"
 		#define LIBTIER0_BIN	"bin/libtier0_srv.so"
+		#define DEDICATED_BIN	"bin/dedicated_srv.so"
 	#elif defined KE_ARCH_X64
 		#define SERVER_BIN 		"cstrike/bin/linux64/server_srv.so"
 		#define ENGINE_BIN 		"bin/linux64/engine_srv.so"
 		#define LIBTIER0_BIN	"bin/linux64/libtier0_srv.so"
+		#define DEDICATED_BIN	"bin/linux64/dedicated_srv.so"
 	#else
 		#error "unsupported architecture"
 	#endif
@@ -146,6 +148,7 @@ struct SrcdsPatch
 	const unsigned char *pPatchSignature; // original opcode signature | function symbol for functionCall = true
 	const char *pPatchPattern; // pattern = x/?, ? = ignore signature
 	const unsigned char *pPatch; // replace with bytes
+	const char *pPatchApplyMask; // '+' = replace byte, '-' = keep original. Length must equal strlen(pPatchPattern), or strlen(pPatch) when functionCall = true
 	const char *pLibrary; // library of function symbol pSignature
 
 	int range = 0x400; // search range: scan up to this many bytes for the signature
@@ -710,10 +713,12 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x0F\x82\xC4\x03\x00\x00\x83\xEC\x08\x6A\x10\x53\xE8\xF1\xFA\xF4\xFF",
 			"xx????xx?x?xx????",
 			(unsigned char *)"\x0F\x82\xC4\x03\x00\x00\x83\xEC\x08\x6A\x10\x53\x90\x90\x90\x90\x90",
+			"------------+++++",
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\x0F\x82\x19\x05\x00\x00\xBE\x10\x00\x00\x00\x4C\x89\xEF\xE8\x2A\x2A\x2A\x2A",
 			"xx????xxxxxxxxx????",
 			(unsigned char *)"\x0F\x82\x19\x05\x00\x00\xBE\x10\x00\x00\x00\x4C\x89\xEF\x90\x90\x90\x90\x90",
+			"--------------+++++",
 #endif
 			SERVER_BIN
 		},
@@ -724,10 +729,12 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x0F\x85\x00\x00\x00\x00\x83\xEC\x0C\x57\xE8\x1D\xFF\xFF\xFF\x83\xC4\x10\x09\x83",
 			"xx????xx?xx????xx?xx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x83\xEC\x0C\x57\xE8\x1D\xFF\xFF\xFF\x83\xC4\x10\x09\x83",
+			"++++++--------------",
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\x0F\x85\x2A\x2A\x2A\x2A\x4C\x89\xEF\xE8\x0C\xFF\xFF\xFF\x41\x09",
 			"xx????xxxx????xx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x4C\x89\xEF\xE8\x0C\xFF\xFF\xFF\x41\x09",
+			"++++++----------",
 #endif
 			SERVER_BIN
 		},
@@ -738,10 +745,12 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x0F\x84\x47\x02\x00\x00\xF6\x83\x40\x01\x00\x00\x20\x0F\x85",
 			"xx????xx?????xx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\xF6\x83\x40\x01\x00\x00\x20\x0F\x85",
+			"++++++---------",
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\x0F\x84\x47\x02\x00\x00\x41\xF6\x84\x24\x0C\x02\x00\x00\x20\x0F\x85",
 			"xx????xxxx????xxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x41\xF6\x84\x24\x0C\x02\x00\x00\x20\x0F\x85",
+			"++++++-----------",
 #endif
 			SERVER_BIN
 		},
@@ -752,10 +761,12 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\xC6\x80\xFD\x00\x00\x00\x00\x8B\x83",
 			"xxxxxxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x8B\x83",
+			"+++++++--",
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\xC6\x80\x91\x01\x00\x00\x00\x8B\x83",
 			"xxxxxxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x8B\x83",
+			"+++++++--",
 #endif
 			SERVER_BIN,
 			0x600
@@ -767,10 +778,12 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x74\x1A\x8B\x16\x8B\x92\x08\x02\x00\x00\x81\xFA\xF0\x09\x2A\x00\x0F\x85",
 			"x?xxxx????xx????xx",
 			(unsigned char *)"\xEB\x1A\x8B\x16\x8B\x92\x08\x02\x00\x00\x81\xFA\xF0\x09\x2A\x00\x0F\x85",
+			"+-----------------",
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\x74\x21\x48\x8B\x03\x48\x8D\x15\x73\xC3\xC9\xFF\x48\x8B\x80\x10\x04\x00\x00",
-			"x?xxxxx?????xxxxxxxx",
+			"x?xxxxx?????xxxxxxx",
 			(unsigned char *)"\xEB\x21\x48\x8B\x03\x48\x8D\x15\x73\xC3\xC9\xFF\x48\x8B\x80\x10\x04\x00\x00",
+			"+------------------",
 #endif
 			SERVER_BIN
 		},
@@ -781,10 +794,12 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x88\x46\x6C",
 			"xxx",
 			(unsigned char *)"\x90\x90\x90",
+			"+++",
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\x41\x88\x44\x24\x6C",
 			"xxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90",
+			"+++++",
 #endif
 			ENGINE_BIN
 		},
@@ -799,6 +814,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			"xxxxxxxxxxxxxxx????",
 #endif
 			(unsigned char *)"\x90\x90\x90\x90\x90",
+			"+++++",
 			ENGINE_BIN,
 			0x7d1, 100,
 			true
@@ -814,6 +830,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			"x????xx?????xx?????xxxxxx????",
 #endif
 			(unsigned char *)"\x90\x90\x90\x90\x90",
+			"+++++",
 			ENGINE_BIN,
 			0x800, 100,
 			true
@@ -825,10 +842,12 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x0F\x84\xD6\x02\x00\x00\x83\xFA\xFF",
 			"xxxxxxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x83\xFA\xFF",
+			"++++++---",
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\x0F\x84\xFF\x02\x00\x00\x83\xFA\xFF",
 			"xxxxxxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x83\xFA\xFF",
+			"++++++---",
 #endif
 			SERVER_BIN
 		},
@@ -840,15 +859,47 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\xC7\x86\xA4\x02\x00\x00\x00\x00\x00\x00",
 			"xxxxxxxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
+			"++++++++++",
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\x41\xC7\x84\x24\x98\x03\x00\x00\x00\x00",
 			"xxxx????xx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
+			"++++++++++",
 #endif
 			SERVER_BIN,
 			0x600
 		},
-		// 15: void CBaseGrenade::Explode( trace_t *pTrace, int bitsDamageType ) NOP out UTIL_DecalTrace( pTrace, "Scorch" ); to stop grenades from causing
+		// 15: bool CZipPackFile::Prepare( int64 fileLen, int64 nFileOfs )
+		// NOPs out lookup.m_hFileName = m_fs->FindOrAddFileName( tmpString ); Line 768
+		// Stops both CUtlLinkedList overflow! (exhausted memory allocator) and CUtlLinkedList overflow! (exhausted index range) errors
+		// This avoids crashing due to loading over 65k strings into stringpool. Custom assets in maps lead towards the limit. jenz - December 2023
+		// TODO: no linux64 signature derived yet, x86-only until someone reverse-engineers one.
+		{
+			"_ZN12CZipPackFile7PrepareExx",
+#if defined KE_ARCH_X86
+			(unsigned char *)"\x8B\x10\x57\x50\xFF\x92\x8C\x00\x00\x00",
+			"xxxxxxxxxx",
+			(unsigned char *)"\x8B\x10\x57\x50\x31\xC0\x90\x90\x90\x90",
+			"----++++++",
+#elif defined KE_ARCH_X64
+
+#endif
+			DEDICATED_BIN,
+			0x600
+		},
+		// 16: Remove filename handle check in CZipPackFile::GetFileInfo that breaks loading mixed case files in bsp pakfiles
+		// This is patched in conjunction with patch 15 to prevent physics collisions from not being loaded
+		// TODO: no linux64 signature derived yet, x86-only until someone reverse-engineers one.
+		{
+			"_ZN12CZipPackFile11GetFileInfoEPKcRiRxS2_S2_Rt",
+			(unsigned char *)"\x75\x00\x8B\x09",
+			"x?xx",
+			(unsigned char *)"\x90\x90\x8B\x09",
+			"++--",
+			DEDICATED_BIN
+		},
+#endif
+		// 17: void CBaseGrenade::Explode( trace_t *pTrace, int bitsDamageType ) NOP out UTIL_DecalTrace( pTrace, "Scorch" ); to stop grenades from causing
 		// "Too many indices for index buffer. Tell a programmer". Grenades cause decals on too many faces for the client to handle.
 		{
 			"_ZN12CBaseGrenade7ExplodeEP10CGameTracei",
@@ -856,42 +907,51 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\xE8\x2A\x2A\x2A\x2A\x83\xC4\x10\x6A\x00\x6A\x00",
 			"x????xxxxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x83\xC4\x10\x6A\x00\x6A\x00",
+			"+++++-------",
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\xE8\x2A\x2A\x2A\x2A\x4C\x89\xE7\x31\xD2\x66\x0F\xEF\xC0",
 			"x????xxxxxxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x4C\x89\xE7\x31\xD2\x66\x0F\xEF\xC0",
+			"+++++---------",
 #endif
 			SERVER_BIN
 		},
-		// 16: void CPlantedC4::Explode( trace_t *pTrace, int bitsDamageType ) NOP out UTIL_DecalTrace( pTrace, "Scorch" ); same reason as 15.
+		// 18: void CPlantedC4::Explode( trace_t *pTrace, int bitsDamageType ) NOP out UTIL_DecalTrace( pTrace, "Scorch" ); same reason as 17.
 		{
 			// TODO: Find a better signature and make cssfixes not modify any address-based opcodes.
 			"_ZN10CPlantedC47ExplodeEP10CGameTracei",
 #if defined KE_ARCH_X86
-			(unsigned char *)"\xE8\x72\xBE\xEB\xFF",
-			"xxxxx",
-			(unsigned char *)"\x90\x90\x90\x90\x90",
+			(unsigned char *)"\xE8\x2A\x2A\x2A\x2A\x8B\x45\x0C\x83\xC4\x0C\x6A\x00\x6A\x00",
+			"x????xxxxxxxxxx",
+			(unsigned char *)"\x90\x90\x90\x90\x90\x8B\x45\x0C\x83\xC4\x0C\x6A\x00\x6A\x00",
+			"+++++----------",
 #elif defined KE_ARCH_X64
+			// TODO: fragile hardcoded-offset signature inherited from the original x64 port; replace with a wildcard pattern like the x86 one above when possible.
 			(unsigned char *)"\xE8\xD5\x06\xEB\xFF",
 			"xxxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90",
+			"+++++",
 #endif
 			SERVER_BIN
 		},
-		// 17: void CEnvExplosion::InputExplode( inputdata_t &inputdata ) NOP out UTIL_DecalTrace( &tr, "Scorch" ); same reason as 15.
+		// 19: void CEnvExplosion::InputExplode( inputdata_t &inputdata ) NOP out UTIL_DecalTrace( &tr, "Scorch" ); same reason as 17.
 		{
 			"_ZN13CEnvExplosion12InputExplodeER11inputdata_t",
 #if defined KE_ARCH_X86
-			(unsigned char *)"\xE8\x2A\x2A\x2A\x2A\x8B\x83\x40\x01\x00\x00\x83\xC4\x10",
-			"x????xx????xxx",
-			(unsigned char *)"\x90\x90\x90\x90\x90\x8B\x83\x40\x01\x00\x00\x83\xC4\x10",
+			(unsigned char *)"\x68\x2A\x2A\x2A\x2A\x56\xE8\x2A\x2A\x2A\x2A\x8B\x83\x2A\x2A\x2A\x2A\x83\xC4\x10\xE9",
+			"x????xx????xx????xxxx",
+			(unsigned char *)"\x68\x2A\x2A\x2A\x2A\x56\x90\x90\x90\x90\x90\x8B\x83\x2A\x2A\x2A\x2A\x83\xC4\x10\xE9",
+			"------+++++----------",
 #elif defined KE_ARCH_X64
+			// TODO: fragile hardcoded-offset signature inherited from the original x64 port; replace with a wildcard pattern like the x86 one above when possible.
 			(unsigned char *)"\x4C\x89\xEF\xE8\x2A\x2A\x2A\x2A\x8B\x83\x0C\x02\x00\x00",
 			"xxxx????xxxx??",
 			(unsigned char *)"\x4C\x89\xEF\x90\x90\x90\x90\x90\x8B\x83\x0C\x02\x00\x00",
+			"---+++++------",
 #endif
 			SERVER_BIN,
-			0x800
+			0x800,
+			1
 		}
 	};
 
@@ -904,10 +964,12 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x74\x57\x83\xEC\x0C\x53\xE8\xDE\x26\xCA\xFF\x83\xC4\x10\x83\xF8\x02\x0F\x84",
 			"x?xx?xx????xx?xx?xx",
 			(unsigned char *)"\xEB\x57\x83\xEC\x0C\x53\xE8\xDE\x26\xCA\xFF\x83\xC4\x10\x83\xF8\x02\x0F\x84",
+			"+------------------",
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\x74\x5E\x4C\x89\xE7\xE8\xBE\x67\xC8\xFF\x83\xF8\x02",
 			"x?xxxx????xxx",
 			(unsigned char *)"\xEB\x5E\x4C\x89\xE7\x90\x90\x90\x90\x90\x83\xF8\x02",
+			"+----+++++---",
 #endif
 			SERVER_BIN
 		});
@@ -918,10 +980,12 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x74\x0A\x8B\x83\x94\x02\x00\x00\x85\xC0\x75\x4A\x83\xEC\x0C\x68\x08\x07\x94\x00\xE8\xB9\x49\x52\x00\x5A\x59",
 			"xxxx????xxx?xx?x????x????xx",
 			(unsigned char *)"\x75\x54\x8B\x83\x94\x02\x00\x00\x85\xC0\x75\x4A\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
+			"++----------+++++++++++++++",
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\x74\x0A\x8B\x8F\xC8\x02\x00\x00\x85\xC9\x75\x4F\x48\x8D\x3D\x90\x75\x1F\x00\x31\xC0\xE8\x11\x02\xB3\xFF",
 			"xxxx????xxx?xxx????xxx????",
 			(unsigned char *)"\x75\x59\x8B\x8F\xC8\x02\x00\x00\x85\xC9\x75\x4F\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
+			"++----------+++-++++++++++",
 #endif
 			SERVER_BIN
 		});
@@ -941,10 +1005,12 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x3D\x80\x3E\x00\x00\x0F\x8F\x00\x00\x00\x00\x8D\x65",
 			"x????xx????xx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x8D\x65",
+			"+++++++++++--",
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\x3D\x80\x3E\x00\x00\x0F\x8F\xF9\x00\x00\x00\x48\x83\xC4\x18",
 			"x????xx????xxxx",
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x48\x83\xC4\x18",
+			"+++++++++++----",
 #endif
 			SERVER_BIN
 		});
@@ -959,10 +1025,12 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x74\x16",
 			"xx",
 			(unsigned char *)"\xEB\x16",
+			"+-",
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\x74\x0F",
 			"xx",
 			(unsigned char *)"\xEB\x0F",
+			"+-",
 #endif
 			SERVER_BIN
 		});
@@ -976,6 +1044,30 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		// PatchLen has to be the number of opcodes for a function call which is just E8 followed by 4 byes
 		int PatchLen = !pPatch->functionCall ? strlen(pPatch->pPatchPattern) : strlen(reinterpret_cast<const char*>(pPatch->pPatch));
 
+		if ((int)strlen(pPatch->pPatchApplyMask) != PatchLen)
+		{
+			g_pSM->LogError(myself, "Patch apply mask length does not match patch pattern length for symbol: %s", pPatch->pSignature);
+			bSuccess = false;
+			continue;
+		}
+
+		bool bValidMask = true;
+		for (int j = 0; j < PatchLen; j++)
+		{
+			if (pPatch->pPatchApplyMask[j] != '+' && pPatch->pPatchApplyMask[j] != '-')
+			{
+				bValidMask = false;
+				break;
+			}
+		}
+
+		if (!bValidMask)
+		{
+			g_pSM->LogError(myself, "Patch apply mask contains invalid characters (expected only '+' or '-') for symbol: %s", pPatch->pSignature);
+			bSuccess = false;
+			continue;
+		}
+
 		void *pBinary = dlopen(pPatch->pLibrary, RTLD_NOW);
 		if (!pBinary)
 		{
@@ -985,9 +1077,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		}
 
 		pPatch->pAddress = (uintptr_t)memutils->ResolveSymbol(pBinary, pPatch->pSignature);
-
 		dlclose(pBinary);
-
 		if (!pPatch->pAddress)
 		{
 			g_pSM->LogError(myself, "Could not find symbol: %s in %s (%p)",
@@ -1049,8 +1139,11 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			SourceHook::SetMemAccess((void *)pPatchAddress, PatchLen, SH_MEM_READ|SH_MEM_WRITE|SH_MEM_EXEC);
 			for (int j = 0; j < PatchLen; j++)
 			{
-				pRestore->pOriginal[j] = *(unsigned char *)(pPatchAddress + j);
-				*(unsigned char *)(pPatchAddress + j) = pPatch->pPatch[j];
+				if (pPatch->pPatchApplyMask[j] == '+')
+				{
+					pRestore->pOriginal[j] = *(unsigned char *)(pPatchAddress + j);
+					*(unsigned char *)(pPatchAddress + j) = pPatch->pPatch[j];
+				}
 			}
 			SourceHook::SetMemAccess((void *)pPatchAddress, PatchLen, SH_MEM_READ|SH_MEM_EXEC);
 
@@ -1156,7 +1249,7 @@ void CSSFixes::SDK_OnUnload()
 		int PatchLen = !pPatch->functionCall ? strlen(pPatch->pPatchPattern) : strlen(reinterpret_cast<const char*>(pPatch->pPatch));
 
 		SrcdsPatch::Restore *pRestore = pPatch->pRestore;
-		while(pRestore)
+		while (pRestore)
 		{
 			if (!pRestore->pOriginal)
 				break;
@@ -1164,7 +1257,10 @@ void CSSFixes::SDK_OnUnload()
 			SourceHook::SetMemAccess((void *)pRestore->pPatchAddress, PatchLen, SH_MEM_READ|SH_MEM_WRITE|SH_MEM_EXEC);
 			for (int j = 0; j < PatchLen; j++)
 			{
-				*(unsigned char *)(pRestore->pPatchAddress + j) = pRestore->pOriginal[j];
+				if (pPatch->pPatchApplyMask[j] == '+')
+				{
+					*(unsigned char *)(pRestore->pPatchAddress + j) = pRestore->pOriginal[j];
+				}
 			}
 			SourceHook::SetMemAccess((void *)pRestore->pPatchAddress, PatchLen, SH_MEM_READ|SH_MEM_EXEC);
 
