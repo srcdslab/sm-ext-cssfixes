@@ -925,7 +925,6 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		},
 		// 18: void CPlantedC4::Explode( trace_t *pTrace, int bitsDamageType ) NOP out UTIL_DecalTrace( pTrace, "Scorch" ); same reason as 17.
 		{
-			// TODO: Find a better signature and make cssfixes not modify any address-based opcodes.
 			"_ZN10CPlantedC47ExplodeEP10CGameTracei",
 #if defined KE_ARCH_X86
 			(unsigned char *)"\xE8\x2A\x2A\x2A\x2A\x8B\x45\x0C\x83\xC4\x0C\x6A\x00\x6A\x00",
@@ -933,11 +932,10 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x90\x90\x90\x90\x90\x8B\x45\x0C\x83\xC4\x0C\x6A\x00\x6A\x00",
 			"+++++----------",
 #elif defined KE_ARCH_X64
-			// TODO: fragile hardcoded-offset signature inherited from the original x64 port; replace with a wildcard pattern like the x86 one above when possible.
-			(unsigned char *)"\xE8\xD5\x06\xEB\xFF",
-			"xxxxx",
-			(unsigned char *)"\x90\x90\x90\x90\x90",
-			"+++++",
+			(unsigned char *)"\x4C\x89\xEF\xE8\x2A\x2A\x2A\x2A\xF3\x0F\x10\x1D\x2A\x2A\x2A\x2A\x49\x8D\x7D\x2A\x31\xD2",
+			"xxxx????xxxx????xxx?xx",
+			(unsigned char *)"\x4C\x89\xEF\x90\x90\x90\x90\x90\xF3\x0F\x10\x1D\x2A\x2A\x2A\x2A\x49\x8D\x7D\x2A\x31\xD2",
+			"---+++++--------------",
 #endif
 			SERVER_BIN
 		},
@@ -950,7 +948,6 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x68\x2A\x2A\x2A\x2A\x56\x90\x90\x90\x90\x90\x8B\x83\x2A\x2A\x2A\x2A\x83\xC4\x10\xE9",
 			"------+++++----------",
 #elif defined KE_ARCH_X64
-			// TODO: fragile hardcoded-offset signature inherited from the original x64 port; replace with a wildcard pattern like the x86 one above when possible.
 			(unsigned char *)"\x4C\x89\xEF\xE8\x2A\x2A\x2A\x2A\x8B\x83\x0C\x02\x00\x00",
 			"xxxx????xxxx??",
 			(unsigned char *)"\x4C\x89\xEF\x90\x90\x90\x90\x90\x8B\x83\x0C\x02\x00\x00",
