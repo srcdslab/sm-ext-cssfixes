@@ -990,7 +990,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x74\x0A\x8B\x8F\xC8\x02\x00\x00\x85\xC9\x75\x4F\x48\x8D\x3D\x90\x75\x1F\x00\x31\xC0\xE8\x11\x02\xB3\xFF",
 			"xxxx????xxx?xxx????xxx????",
 			(unsigned char *)"\x75\x59\x8B\x8F\xC8\x02\x00\x00\x85\xC9\x75\x4F\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
-			"++----------+++-++++++++++",
+			"++----------++++++++++++++", // NOP the whole lea rdi, [rip+msg] / xor eax / call Msg
 #endif
 			SERVER_BIN
 		});
