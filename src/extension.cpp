@@ -769,10 +769,11 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x8B\x83",
 			"+++++++--",
 #elif defined KE_ARCH_X64
-			(unsigned char *)"\xC6\x80\x91\x01\x00\x00\x00\x8B\x83",
-			"xxxxxxxxx",
-			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x8B\x83",
-			"+++++++--",
+			// mov byte ptr [rax+0x191], 0 (m_takedamage); the following load's register varies between builds
+			(unsigned char *)"\xC6\x80\x91\x01\x00\x00\x00",
+			"xxxxxxx",
+			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90",
+			"+++++++",
 #endif
 			SERVER_BIN,
 			0x600
@@ -1344,6 +1345,7 @@ uintptr_t FindFunctionAddressByPattern(uintptr_t StartAddr, size_t MaxSize)
 	if (*reinterpret_cast<unsigned char *>(E8Addr) != 0xE8)
 		return 0x00;
 
-	uint32_t offset = *reinterpret_cast<int32_t *>(E8Addr + 1);
-	return E8Addr + 5 + offset;
+	// rel32 is signed: calls into the PLT go backwards. Keep the sign on x86_64.
+	int32_t offset = *reinterpret_cast<int32_t *>(E8Addr + 1);
+	return E8Addr + 5 + static_cast<intptr_t>(offset);
 }
