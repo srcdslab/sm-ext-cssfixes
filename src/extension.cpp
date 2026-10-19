@@ -868,10 +868,10 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
 			"++++++++++",
 #elif defined KE_ARCH_X64
-			(unsigned char *)"\x41\xC7\x84\x24\x98\x03\x00\x00\x00\x00",
-			"xxxx????xx",
-			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
-			"++++++++++",
+			(unsigned char *)"\x41\xC7\x84\x24\x98\x03\x00\x00\x00\x00\x00\x00",
+			"xxxx????xxxx",
+			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
+			"++++++++++++",
 #endif
 			SERVER_BIN,
 			0x600
