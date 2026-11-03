@@ -769,10 +769,11 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x8B\x83",
 			"+++++++--",
 #elif defined KE_ARCH_X64
-			(unsigned char *)"\xC6\x80\x91\x01\x00\x00\x00\x8B\x83",
-			"xxxxxxxxx",
-			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x8B\x83",
-			"+++++++--",
+			// mov byte ptr [rax+0x191], 0 (m_takedamage); the following load's register varies between builds
+			(unsigned char *)"\xC6\x80\x91\x01\x00\x00\x00",
+			"xxxxxxx",
+			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90",
+			"+++++++",
 #endif
 			SERVER_BIN,
 			0x600
@@ -867,10 +868,10 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
 			"++++++++++",
 #elif defined KE_ARCH_X64
-			(unsigned char *)"\x41\xC7\x84\x24\x98\x03\x00\x00\x00\x00",
-			"xxxx????xx",
-			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
-			"++++++++++",
+			(unsigned char *)"\x41\xC7\x84\x24\x98\x03\x00\x00\x00\x00\x00\x00",
+			"xxxx????xxxx",
+			(unsigned char *)"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
+			"++++++++++++",
 #endif
 			SERVER_BIN,
 			0x600
@@ -982,14 +983,14 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			"_ZN12CCSGameRules18NeededPlayersCheckERb",
 #if defined KE_ARCH_X86
 			(unsigned char *)"\x74\x0A\x8B\x83\x94\x02\x00\x00\x85\xC0\x75\x4A\x83\xEC\x0C\x68\x08\x07\x94\x00\xE8\xB9\x49\x52\x00\x5A\x59",
-			"xxxx????xxx?xx?x????x????xx",
+			"xxxx????xxxxxx?x????x????xx",
 			(unsigned char *)"\x75\x54\x8B\x83\x94\x02\x00\x00\x85\xC0\x75\x4A\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
 			"++----------+++++++++++++++",
 #elif defined KE_ARCH_X64
 			(unsigned char *)"\x74\x0A\x8B\x8F\xC8\x02\x00\x00\x85\xC9\x75\x4F\x48\x8D\x3D\x90\x75\x1F\x00\x31\xC0\xE8\x11\x02\xB3\xFF",
-			"xxxx????xxx?xxx????xxx????",
+			"xxxx????xxxxxxx????xxx????",
 			(unsigned char *)"\x75\x59\x8B\x8F\xC8\x02\x00\x00\x85\xC9\x75\x4F\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",
-			"++----------+++-++++++++++",
+			"++----------++++++++++++++", // NOP the whole lea rdi, [rip+msg] / xor eax / call Msg
 #endif
 			SERVER_BIN
 		});
@@ -1031,10 +1032,10 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			(unsigned char *)"\xEB\x16",
 			"+-",
 #elif defined KE_ARCH_X64
-			(unsigned char *)"\x74\x0F",
-			"xx",
-			(unsigned char *)"\xEB\x0F",
-			"+-",
+			(unsigned char *)"\x83\xBF\x2A\x2A\x2A\x2A\x01\x74\x0F",
+			"xx????xxx",
+			(unsigned char *)"\x83\xBF\x2A\x2A\x2A\x2A\x01\xEB\x0F",
+			"-------+-",
 #endif
 			SERVER_BIN
 		});
@@ -1110,6 +1111,9 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		int found;
 		for (found = 0; found < pPatch->occurrences; found++)
 		{
+			if (ofs >= (uintptr_t)pPatch->range)
+				break;
+
 			uintptr_t pPatchAddress = 0x00;
 			if (pPatch->functionCall)
 			{
@@ -1130,7 +1134,7 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 
 				g_pSM->LogError(myself, "Could not find patch signature for symbol: %s", pPatch->pSignature);
 				bSuccess = false;
-				continue;
+				break;
 			}
 			ofs = pPatchAddress - pPatch->pAddress + PatchLen;
 
@@ -1326,8 +1330,6 @@ uintptr_t FindFunctionCall(uintptr_t BaseAddr, uintptr_t Function, size_t MaxSiz
 #endif
 			if (CallAddr == Function)
 				return (uintptr_t)(pMemory + i);
-
-			i += 4;
 		}
 	}
 
@@ -1344,6 +1346,7 @@ uintptr_t FindFunctionAddressByPattern(uintptr_t StartAddr, size_t MaxSize)
 	if (*reinterpret_cast<unsigned char *>(E8Addr) != 0xE8)
 		return 0x00;
 
-	uint32_t offset = *reinterpret_cast<int32_t *>(E8Addr + 1);
-	return E8Addr + 5 + offset;
+	// rel32 is signed: calls into the PLT go backwards. Keep the sign on x86_64.
+	int32_t offset = *reinterpret_cast<int32_t *>(E8Addr + 1);
+	return E8Addr + 5 + static_cast<intptr_t>(offset);
 }
