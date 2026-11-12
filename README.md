@@ -33,6 +33,24 @@ void CMovementSpeedMod::InputSpeedMod(inputdata_t &data)
 
 **NOP**'d out the block.
 
+#### File: game/server/cstrike/bot/cs_bot_vision.cpp
+
+```C
+CCSPlayer *CCSBot::FindMostDangerousThreat( void )
+[...]
+	enum { MAX_THREATS = 16 };
+[...]
+					for( int k=threatCount-1; k>=j; --k )
+						threat[k+1] = threat[k];
+[...]
+					if (threatCount < MAX_THREATS)
+						++threatCount;
+[...]
+```
+With 16 threats stored, inserting a closer one writes **threat[16]**, one past the end of the stack array.
+On x86_64 that overwrites the caller's saved `rbx`, and `CCSBot::UpdateReactionQueue` crashes once a bot sees 17 or more enemies.
+The count is capped at **15** instead, so every write stays inside the array.
+
 # Configuration
 In cstrike/cfg/server.cfg add this
 ```
