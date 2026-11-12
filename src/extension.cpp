@@ -957,6 +957,27 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			SERVER_BIN,
 			0x800,
 			1
+		},
+		// 20: CCSBot::FindMostDangerousThreat keeps the visible enemies in a stack array threat[MAX_THREATS] (16), sorted by distance.
+		// When it is full and a closer enemy shows up, the insertion shifts threat[15] into threat[16], one past the end.
+		// On x86 that slot is another local; on x86_64 it is the caller's saved rbx (the bot's this pointer), so
+		// CCSBot::UpdateReactionQueue crashes right after the call once a bot sees 17+ enemies at once.
+		// Cap the count at 15 instead of 16 (threatCount += threatCount < 15): every write then stays inside the array.
+		{
+			"_ZN6CCSBot23FindMostDangerousThreatEv",
+#if defined KE_ARCH_X86
+			(unsigned char *)"\x83\xF9\x10\x0F\x9C\xC0\x01\xC1",
+			"xxxxxxxx",
+			(unsigned char *)"\x83\xF9\x0F\x0F\x9C\xC0\x01\xC1",
+			"--+-----", // cmp ecx, 16 -> cmp ecx, 15
+#elif defined KE_ARCH_X64
+			(unsigned char *)"\x31\xC0\x83\xFE\x10\x0F\x9C\xC0\x01\xC6",
+			"xxxxxxxxxx",
+			(unsigned char *)"\x31\xC0\x83\xFE\x0F\x0F\x9C\xC0\x01\xC6",
+			"----+-----", // cmp esi, 16 -> cmp esi, 15
+#endif
+			SERVER_BIN,
+			0x1C80 // the cmp is at +0x1658 (x86) / +0x19A7 (x86_64) in a 0x18A8 / 0x1C6D byte function (CS:S build 11003710)
 		}
 	};
 
