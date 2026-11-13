@@ -979,6 +979,33 @@ bool CSSFixes::SDK_OnLoad(char *error, size_t maxlength, bool late)
 			SERVER_BIN,
 			0x1C80 // the cmp is at +0x1658 (x86) / +0x19A7 (x86_64) in a 0x18A8 / 0x1C6D byte function (CS:S build 11003710)
 		}
+#if defined KE_ARCH_X64
+		,
+		// 21 + 22: BotCOS / BotSIN read cosTable[(int)(AngleNormalizePositive(angle) * 255 / 360)].
+		// A NaN angle (seen as CCSBot::m_forwardAngle in FeelerReflexAdjustment) makes cvttss2si return 0x80000000.
+		// On x86 the 32-bit address wraps (0x80000000 * 4 = 0) and reads cosTable[0]; on x86_64 cltq sign-extends it
+		// and the load lands 8 GiB below the table: crash at BotSIN+0x27 on Z.REVIVAL (13/11/2026, twice).
+		// Convert to a 64-bit register instead (cvttss2si rax; nop replaces cvttss2si eax; cltq): valid angles give the
+		// same index, and NaN gives 0x8000000000000000 * 4 = 0 like on x86.
+		{
+			"_Z6BotCOSf",
+			(unsigned char *)"\xF3\x0F\x2C\xC0\x48\x98\xF3\x0F\x10\x04\x82",
+			"xxxxxxxxxxx",
+			(unsigned char *)"\xF3\x48\x0F\x2C\xC0\x90\xF3\x0F\x10\x04\x82",
+			"-+++++-----", // cvttss2si eax, xmm0; cltq -> cvttss2si rax, xmm0; nop
+			SERVER_BIN,
+			0x40 // the conversion is at +0x19 in a 0x25 byte function (CS:S build 11003710)
+		},
+		{
+			"_Z6BotSINf",
+			(unsigned char *)"\xF3\x0F\x2C\xC0\x48\x98\xF3\x0F\x10\x04\x82",
+			"xxxxxxxxxxx",
+			(unsigned char *)"\xF3\x48\x0F\x2C\xC0\x90\xF3\x0F\x10\x04\x82",
+			"-+++++-----", // cvttss2si eax, xmm0; cltq -> cvttss2si rax, xmm0; nop
+			SERVER_BIN,
+			0x40 // the conversion is at +0x21 in a 0x2D byte function (CS:S build 11003710)
+		}
+#endif
 	};
 
 	if (g_SvForceCTSpawn->GetInt())
